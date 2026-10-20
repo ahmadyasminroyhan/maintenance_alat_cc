@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Maintenance CC - PT Terminal Petikemas Surabaya</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- SheetJS (XLSX) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#0284c7',
+            primaryDark: '#0369a1',
+            accent: '#ff5722',
+            accentHover: '#ea580c',
+            surface: '#f8fafc',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .dropdown-z-index {
+      z-index: 9999 !important;
+    }
+
+    .nav-active {
+      background-color: #0369a1 !important;
+      border-bottom: 3px solid #38bdf8;
+      font-weight: 700;
+    }
+
+    .login-bg-overlay {
+      background: linear-gradient(rgba(2, 132, 199, 0.75), rgba(15, 23, 42, 0.85)),
+        url('bg_login.jpg') no-repeat center center fixed;
+      background-size: cover;
+    }
+  </style>
+</head>
+
+<body class="bg-surface text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+  <!-- MODAL LOGIN UTAMA -->
+  <div id="loginModal" class="fixed inset-0 login-bg-overlay dropdown-z-index flex items-center justify-center p-4">
+    <div
+      class="bg-white/95 backdrop-blur-md rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 border border-white/20">
+      <div class="text-center space-y-2 border-b pb-4">
+        <div
+          class="bg-primary text-white w-14 h-14 rounded-2xl mx-auto flex items-center justify-center text-2xl shadow-lg">
+          <i class="fa-solid fa-ship"></i>
+        </div>
+        <h3 class="font-bold text-slate-800 text-xl">AI Maintenance CC</h3>
+        <p class="text-xs font-semibold text-primary">PT Terminal Petikemas Surabaya</p>
+      </div>
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="text-xs font-semibold text-slate-600 block mb-1">Pilih Peran:</label>
+          <select id="loginRole"
+            class="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-slate-50 font-semibold text-slate-700">
+            <option value="teknisi">Teknisi</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-600 block mb-1">Nama / ID Pengguna (Riwayat Sesi Chat):</label>
+          <input type="text" id="loginUsername" placeholder="Contoh: Budi_Teknisi" required
+            class="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-slate-50">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-600 block mb-1">Kata Sandi / PIN Akses:</label>
+          <input type="password" id="loginPassword" placeholder="Masukkan password..." required
+            class="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-slate-50">
+        </div>
+        <button type="submit"
+          class="w-full bg-primary hover:bg-primaryDark text-white font-bold py-3 rounded-lg text-sm shadow-lg transition">
+          Masuk ke Sistem
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOP HEADER -->
+  <header class="bg-primary text-white shadow-md sticky top-0 dropdown-z-index">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <div class="bg-white text-primary p-2 rounded-lg shadow font-bold">
+          <i class="fa-solid fa-ship text-xl"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg leading-tight">AI Maintenance CC</h1>
+          <p class="text-xs text-sky-100">PT TERMINAL PETIKEMAS SURABAYA</p>
+        </div>
+      </div>
+
+      <!-- KELOMPOK TOMBOL KANAN -->
+      <div id="headerActionControls" class="hidden items-center space-x-3 mt-2 sm:mt-0 relative">
+        <div id="liveClockWidget"
+          class="hidden md:flex items-center space-x-1.5 bg-sky-900/40 text-sky-100 px-3 py-1.5 rounded-lg text-xs font-mono border border-sky-600/50">
+          <i class="fa-regular fa-clock text-sky-300"></i>
+          <span id="headerClock">--:--:-- WIB</span>
+        </div>
+
+        <div class="relative inline-block text-left" id="inputDropdownContainer">
+          <button onclick="toggleInputDropdown(event)"
+            class="bg-accent hover:bg-accentHover text-white text-sm font-semibold px-4 py-2 rounded-lg shadow transition flex items-center space-x-2">
+            <i class="fa-solid fa-plus"></i>
+            <span>+ Input Data</span>
+            <i class="fa-solid fa-chevron-down text-xs ml-1"></i>
+          </button>
+          <div id="inputDropdownMenu"
+            class="hidden absolute right-0 mt-2 w-64 rounded-xl bg-white shadow-2xl ring-1 ring-black ring-opacity-5 dropdown-z-index py-1">
+            <a href="#" onclick="openManualModal(); return false;"
+              class="flex items-center space-x-2 px-4 py-3 text-sm text-slate-700 hover:bg-slate-100 font-medium">
+              <i class="fa-solid fa-keyboard text-teal-600 w-5"></i>
+              <span>1. Input Manual Form</span>
+            </a>
+            <a href="#" onclick="openUploadModal(); return false;"
+              class="flex items-center space-x-2 px-4 py-3 text-sm text-slate-700 hover:bg-slate-100 font-medium border-t border-slate-100">
+              <i class="fa-solid fa-cloud-arrow-up text-primary w-5"></i>
+              <span>2. Unggah Arsip Laporan (Full Parser)</span>
+            </a>
+          </div>
+        </div>
+
+        <button id="resetDataBtn" onclick="resetData()"
+          class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow transition flex items-center space-x-2">
+          <i class="fa-solid fa-rotate-right"></i>
+          <span>Reset Data</span>
+        </button>
+        <span id="dataStatusBadge" class="bg-slate-600 text-white text-xs px-2.5 py-1 rounded-full font-medium">BELUM
+          ADA DATA (0)</span>
+
+        <!-- PROFIL PENGGUNA -->
+        <div
+          class="flex items-center space-x-2 bg-sky-900/60 border border-sky-500/40 px-3 py-1.5 rounded-lg text-white ml-2">
+          <div class="w-7 h-7 rounded-full bg-sky-600 flex items-center justify-center font-bold text-xs shadow-inner"
+            id="userInitialBadge">
+            AY
+          </div>
+          <div class="hidden lg:block text-left">
+            <p id="userProfileName" class="text-xs font-bold leading-tight">Ahmad Yasmin R.</p>
+            <p id="userProfileRole" class="text-[10px] text-sky-200 leading-none">Engineer / Admin</p>
+          </div>
+          <button onclick="logoutSystem()" title="Keluar Akun" class="text-sky-300 hover:text-white ml-1 text-xs"><i
+              class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NAVIGATION NAVBAR -->
+    <nav id="headerNavbarMenu" class="hidden bg-primaryDark border-t border-sky-600 shadow-inner">
+      <div class="max-w-7xl mx-auto px-4 flex justify-center">
+        <div class="flex space-x-1 overflow-x-visible py-1">
+          <div class="relative group dropdown-z-index">
+            <button id="nav-btn-dashboard" onclick="switchTab('dashboard')"
+              class="nav-link-btn px-4 py-2 text-sm font-medium text-white hover:bg-primary rounded transition flex items-center space-x-1 nav-active">
+              <span>Dashboard</span>
+              <i class="fa-solid fa-chevron-down text-[10px]"></i>
+            </button>
+            <div
+              class="absolute left-0 mt-0 w-72 bg-white rounded-lg shadow-2xl py-1 hidden group-hover:block dropdown-z-index text-slate-700 border border-slate-200">
+              <a href="#" onclick="switchTab('dashboard'); return false;"
+                class="block px-4 py-2.5 text-xs hover:bg-slate-100 font-semibold border-b border-slate-100"><i
+                  class="fa-solid fa-chart-line text-primary mr-2"></i>Dashboard Utama</a>
+              <a href="#" onclick="switchTab('analytics'); return false;"
+                class="block px-4 py-2.5 text-xs hover:bg-slate-100 font-semibold"><i
+                  class="fa-solid fa-chart-pie text-emerald-600 mr-2"></i>Grafik Analitik Komprehensif</a>
+            </div>
+          </div>
+
+          <button id="nav-btn-units" onclick="switchTab('units')"
+            class="nav-link-btn px-4 py-2 text-sm font-medium text-white hover:bg-primary rounded transition">Data &
+            Unit Crane</button>
+          <button id="nav-btn-maintenance" onclick="switchTab('maintenance')"
+            class="nav-link-btn px-4 py-2 text-sm font-medium text-white hover:bg-primary rounded transition">Work Order
+            & Breakdown</button>
+          <button id="nav-btn-files" onclick="switchTab('files')"
+            class="nav-link-btn px-4 py-2 text-sm font-medium text-white hover:bg-primary rounded transition">Arsip
+            Dokumen</button>
+          <button id="nav-btn-ai" onclick="switchTab('ai')"
+            class="nav-link-btn px-4 py-2 text-sm font-medium text-white hover:bg-primary rounded transition">AI
+            Assistant</button>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toastNotification"
+    class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center space-x-3 text-sm dropdown-z-index">
+    <i class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+    <span id="toastMessage">Notifikasi sistem</span>
+  </div>
+
+  <!-- MODAL UNGGAH ARSIP -->
+  <div id="uploadModal"
+    class="fixed inset-0 bg-slate-900/60 dropdown-z-index hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-slate-800 text-lg flex items-center space-x-2">
+          <i class="fa-solid fa-cloud-arrow-up text-primary"></i>
+          <span>Unggah Berkas Laporan Excel</span>
+        </h3>
+        <button onclick="closeUploadModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-semibold text-slate-600 block mb-1">Pilih Tahun:</label>
+          <select id="uploadYear" class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-slate-50">
+            <option value="2026">2026</option>
+            <option value="2025">2025</option>
+            <option value="2024">2024</option>
+            <option value="2023">2023</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-600 block mb-1">Pilih Bulan:</label>
+          <select id="uploadMonth" class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-slate-50">
+            <option value="Januari">Januari</option>
+            <option value="Februari">Februari</option>
+            <option value="Maret">Maret</option>
+            <option value="April">April</option>
+            <option value="Mei">Mei</option>
+            <option value="Juni">Juni</option>
+            <option value="Juli">Juli</option>
+            <option value="Agustus">Agustus</option>
+            <option value="September">September</option>
+            <option value="Oktober">Oktober</option>
+            <option value="November">November</option>
+            <option value="Desember">Desember</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-600 block mb-1">Berkas Excel (.xlsx / .xls):</label>
+          <input type="file" id="actualFileInput"
+            class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-slate-50" accept=".xlsx, .xls">
+        </div>
+      </div>
+      <div class="flex justify-end space-x-2 pt-3 border-t">
+        <button onclick="closeUploadModal()"
+          class="px-4 py-2 bg-slate-200 text-slate-700 text-sm rounded-lg">Batal</button>
+        <button onclick="processUploadedFile()"
+          class="px-4 py-2 bg-primary text-white text-sm font-semibold rounded-lg">Proses Full Parser</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL INPUT MANUAL FORM -->
+  <div id="manualModal"
+    class="fixed inset-0 bg-slate-900/60 dropdown-z-index hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-slate-800 text-lg flex items-center space-x-2">
+          <i class="fa-solid fa-keyboard text-teal-600"></i>
+          <span>Input Manual Form & Solusi Perbaikan</span>
+        </h3>
+        <button onclick="closeManualModal()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+      </div>
+      <form id="manualForm" onsubmit="submitManualForm(event)" class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-slate-600 block mb-1">Tanggal Pengerjaan:</label>
+            <input type="date" id="manDate" required
+              class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-slate-50">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-600 block mb-1">Unit Crane (CC):</label>
+            <select id="manCrane" class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-slate-50">
+              <option value="CC01">CC01</option>
+              <option value="CC02">CC02</option>
+              <option value="CC03">CC03</option>
+              <option value="CC04">CC04</option>
+              <option value="CC06">CC06</option>
+              <option value="CC08">CC08</option>
+              <option value="CC09">CC09</option>
+              <option value="CC10">CC10</option>
+              <option value="CC14">CC14</option>
+              <option value="CC15">CC15</option>
+              <option value="CC16">CC16</option>
+              <option value="CC21">CC21</option>
+              <option value="CC22">CC22</option>
+              <option value="CC23">CC23</option>
+              <option value="CC24">CC24</option>
+              <option value="CC25">CC25</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-slate-600 block mb-1">Nomor Work Order (No. WO):</label>
+            <input type="text" id="manWoNum" placeholder="Misal: WO-2026-9999" required
+              class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-slate-50 font-mono">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-600 block mb-1">Sistem Terkait (Subsystem):</label>
+            <select id="manSubsystem" class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-slate-50">
+              <option value="SPREADER SYSTEM">SPREADER SYSTEM</option>
+              <option value="GANTRY SYSTEM">GANTRY SYSTEM</option>
+              <option value="HOIST SYSTEM">HOIST SYSTEM</option>
+              <option value="TRIM LIST SKEW SYSTEM">TRIM LIST SKEW SYSTEM</option>
+              <option value="TROLLEY SYSTEM">TROLLEY SYSTEM</option>
+              <option value="ELECTRIC CONTROL SYSTEM">ELECTRIC CONTROL SYSTEM</option>
+              <option value="OTHER SYSTEM">OTHER SYSTEM</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-slate-600 block mb-1">Durasi Downtime (Jam):</label>
+            <input type="number" step="0.1" id="manDowntime" placeholder="1.5" required
+              class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-slate-50">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-600 block mb-1">Produksi Boxes:</label>
+            <input type="number" id="manBoxes" placeholder="0" value="0"
+              class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-slate-50">
+          </div>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-600 block mb-1">Keterangan Pekerjaan / Tindakan:</label>
+          <textarea id="manDesc" rows="3" placeholder="Tuliskan detail tindakan perbaikan..."
+            class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-slate-50" required></textarea>
+        </div>
+        <div class="flex justify-end space-x-2 pt-3 border-t">
+          <button type="button" onclick="closeManualModal()"
+            class="px-4 py-2 bg-slate-200 text-slate-700 text-sm rounded-lg">Batal</button>
+          <button type="submit"
+            class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg">Simpan
+            Data</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
+
+    <!-- FILTER BAR TERPADU -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-wrap items-center gap-4">
+      <div class="flex items-center space-x-2 text-sm font-semibold text-slate-700">
+        <i class="fa-solid fa-filter text-primary"></i>
+        <span>Filter Data:</span>
+      </div>
+      <div>
+        <select id="filterYear" onchange="applyGlobalFilter()"
+          class="border border-slate-300 text-sm rounded-lg px-3 py-1.5 bg-slate-50 font-semibold text-primary">
+          <option value="2026">Tahun 2026</option>
+          <option value="2025">Tahun 2025</option>
+          <option value="2024">Tahun 2024</option>
+          <option value="2023">Tahun 2023</option>
+        </select>
+      </div>
+      <div>
+        <select id="filterMonth" onchange="applyGlobalFilter()"
+          class="border border-slate-300 text-sm rounded-lg px-3 py-1.5 bg-slate-50">
+          <option value="ALL">Semua Bulan (Setahun)</option>
+          <option value="Januari">Januari</option>
+          <option value="Februari">Februari</option>
+          <option value="Maret">Maret</option>
+          <option value="April">April</option>
+          <option value="Mei">Mei</option>
+          <option value="Juni">Juni</option>
+          <option value="Juli">Juli</option>
+          <option value="Agustus">Agustus</option>
+          <option value="September">September</option>
+          <option value="Oktober">Oktober</option>
+          <option value="November">November</option>
+          <option value="Desember">Desember</option>
+        </select>
+      </div>
+      <div>
+        <select id="filterCrane" onchange="applyGlobalFilter()"
+          class="border border-slate-300 text-sm rounded-lg px-3 py-1.5 bg-slate-50">
+          <option value="ALL">Semua Unit CC Aktif</option>
+          <option value="CC01">CC01</option>
+          <option value="CC02">CC02</option>
+          <option value="CC03">CC03</option>
+          <option value="CC04">CC04</option>
+          <option value="CC06">CC06</option>
+          <option value="CC08">CC08</option>
+          <option value="CC09">CC09</option>
+          <option value="CC10">CC10</option>
+          <option value="CC14">CC14</option>
+          <option value="CC15">CC15</option>
+          <option value="CC16">CC16</option>
+          <option value="CC21">CC21</option>
+          <option value="CC22">CC22</option>
+          <option value="CC23">CC23</option>
+          <option value="CC24">CC24</option>
+          <option value="CC25">CC25</option>
+        </select>
+      </div>
+      <div class="flex items-center space-x-2">
+        <label class="text-xs font-semibold text-slate-600">Pilih Tanggal:</label>
+        <input type="date" id="filterSingleDate" onchange="applyGlobalFilter()"
+          class="border border-slate-300 text-xs rounded-lg px-2 py-1.5 bg-slate-50">
+        <button onclick="document.getElementById('filterSingleDate').value=''; applyGlobalFilter();"
+          class="text-xs text-rose-600 font-bold hover:underline">Reset</button>
+      </div>
+    </div>
+
+    <!-- TAB DASHBOARD UTAMA -->
+    <section id="section-dashboard" class="tab-section space-y-6">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold text-slate-800">Dashboard Operasional & Analitik Jangka Panjang</h2>
+        <div id="activeFileIndicator"
+          class="text-xs bg-slate-100 text-slate-600 font-semibold px-3 py-1 rounded-lg border border-slate-200">
+          Status: Belum ada file yang diunggah
+        </div>
+      </div>
+
+      <!-- METRIC CARDS -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div
+          class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-primary relative overflow-hidden">
+          <p class="text-xs font-semibold text-slate-500 uppercase relative z-10">Total Unit CC Aktif</p>
+          <h3 id="cardTotalCrane" class="text-2xl font-bold text-slate-800 mt-1 relative z-10">0</h3>
+          <p class="text-[10px] text-slate-400 mt-1 relative z-10">Sesuai Filter & Operasional</p>
+          <i class="fa-solid fa-crane absolute -bottom-2 -right-2 text-5xl text-slate-50 opacity-50 z-0"></i>
+        </div>
+        <div
+          class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-sky-500 relative overflow-hidden">
+          <p class="text-xs font-semibold text-slate-500 uppercase relative z-10">Total Produksi</p>
+          <h3 id="cardTotalBoxes" class="text-2xl font-bold text-slate-800 mt-1 relative z-10">0</h3>
+          <p class="text-[10px] text-slate-400 mt-1 relative z-10">Dalam Boxes</p>
+        </div>
+        <div
+          class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-accent relative overflow-hidden">
+          <p class="text-xs font-semibold text-slate-500 uppercase relative z-10">Total Breakdown (BD)</p>
+          <h3 id="cardTotalBD" class="text-2xl font-bold text-slate-800 mt-1 relative z-10">0</h3>
+          <p class="text-[10px] text-slate-400 mt-1 relative z-10">Frekuensi Kejadian</p>
+        </div>
+        <div
+          class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-emerald-500 relative overflow-hidden">
+          <p class="text-xs font-semibold text-slate-500 uppercase relative z-10">Nilai MMBF Total</p>
+          <h3 id="cardTotalMmbf" class="text-2xl font-bold text-slate-800 mt-1 relative z-10">0</h3>
+          <p class="text-[10px] text-slate-400 mt-1 relative z-10">Boxes / Breakdown</p>
+        </div>
+        <div
+          class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-purple-500 relative overflow-hidden">
+          <p class="text-xs font-semibold text-slate-500 uppercase relative z-10">Total Downtime</p>
+          <h3 id="cardTotalDowntime" class="text-2xl font-bold text-slate-800 mt-1 relative z-10">0 Jam</h3>
+          <p class="text-[10px] text-slate-400 mt-1 relative z-10">Durasi Perbaikan</p>
+        </div>
+      </div>
+
+      <!-- CHART DUAL-AXIS UTAMA -->
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-slate-800 text-base">Grafik Tren (Produksi, Breakdown, & MMBF)</h3>
+          <span id="chartSubtitle"
+            class="text-xs text-slate-500 font-semibold bg-slate-100 px-3 py-1 rounded-full">Tahun 2026</span>
+        </div>
+        <div style="height: 380px;">
+          <canvas id="mainTrendChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB GRAFIK ANALITIK KOMPREHENSIF -->
+    <section id="section-analytics" class="tab-section hidden space-y-6">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold text-slate-800">Grafik Analitik Komprehensif (Per Unit CC Aktif)</h2>
+        <span class="text-xs bg-emerald-100 text-emerald-800 font-semibold px-3 py-1 rounded-lg">Real-time
+          Sinkronisasi</span>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+          <h3 class="font-bold text-slate-800 text-sm mb-3">1. Produksi Boxes (Per Unit CC)</h3>
+          <div style="height: 280px;"><canvas id="gridBarBoxes"></canvas></div>
+        </div>
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+          <h3 class="font-bold text-slate-800 text-sm mb-3">2. MTBF (Per Unit CC)</h3>
+          <div style="height: 280px;"><canvas id="gridBarTimeOp"></canvas></div>
+        </div>
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+          <h3 class="font-bold text-slate-800 text-sm mb-3">3. MMBF (Per Unit CC)</h3>
+          <div style="height: 280px;"><canvas id="gridBarMmbf"></canvas></div>
+        </div>
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center">
+          <h3 class="font-bold text-slate-800 text-sm mb-3 w-full text-left">4. BIG 6 OF BREAKDOWN (By Subsystem)</h3>
+          <div style="height: 280px; width: 100%; max-width: 340px;"><canvas id="gridPieBig6"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB UNITS -->
+    <section id="section-units" class="tab-section hidden space-y-6">
+      <h2 class="text-xl font-bold text-slate-800">Master Data Unit Crane (CC) PT TPS</h2>
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="bg-slate-100 text-slate-700 border-b">
+              <th class="p-3">Unit Code</th>
+              <th class="p-3">Tipe / Spesifikasi</th>
+              <th class="p-3">Status Filter Aktif (Data Tersedia)</th>
+            </tr>
+          </thead>
+          <tbody id="unitTableBody" class="divide-y divide-slate-200">
+            <tr>
+              <td colspan="3" class="p-6 text-center text-slate-400">Memuat master data unit...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB WORK ORDER & BREAKDOWN -->
+    <section id="section-maintenance" class="tab-section hidden space-y-6">
+      <h2 class="text-xl font-bold text-slate-800">Rincian Work Order (WO) & Breakdown</h2>
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-x-auto max-h-[70vh]">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="bg-slate-100 text-slate-700 border-b sticky top-0 bg-slate-100">
+              <th class="p-3 text-center w-12">No</th>
+              <th class="p-3">Tanggal</th>
+              <th class="p-3">No. Work Order</th>
+              <th class="p-3">Keterangan (Problem)</th>
+              <th class="p-3">Work Type</th>
+              <th class="p-3">Asset</th>
+              <th class="p-3">Durasi</th>
+              <th class="p-3">Sistem Terkait (Big 6)</th>
+            </tr>
+          </thead>
+          <tbody id="woTableBody" class="divide-y divide-slate-200">
+            <tr>
+              <td colspan="8" class="p-6 text-center text-slate-400">- Belum Ada Data Aktual -</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB ARSIP DOKUMEN -->
+    <section id="section-files" class="tab-section hidden space-y-6">
+      <h2 class="text-xl font-bold text-slate-800">Arsip Berkas Laporan Terunggah</h2>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="bg-slate-100 text-slate-700 border-b">
+              <th class="p-3">Nama Berkas</th>
+              <th class="p-3">Tahun & Bulan</th>
+              <th class="p-3">Total Produksi</th>
+              <th class="p-3">Total Breakdown</th>
+              <th class="p-3">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="fileArchiveTableBody" class="divide-y divide-slate-200">
+            <tr>
+              <td colspan="5" class="p-6 text-center text-slate-400">- Belum ada arsip berkas -</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB AI GEMINI (DENGAN SIDEBAR RIWAYAT CHAT MASING-MASING AKUN) -->
+    <section id="section-ai" class="tab-section hidden space-y-6">
+      <h2 class="text-xl font-bold text-slate-800">Asisten AI Gemini & Knowledge-Base Arsip</h2>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex h-[580px] overflow-hidden">
+
+        <!-- SIDEBAR RIWAYAT CHAT -->
+        <div class="w-72 bg-slate-100 border-r border-slate-200 flex flex-col">
+          <div class="p-3 border-b border-slate-200 flex justify-between items-center bg-slate-200/50">
+            <span class="text-xs font-bold text-slate-700"><i class="fa-solid fa-clock-rotate-left mr-1"></i> Riwayat
+              Sesi Chat</span>
+            <button onclick="createNewChatSession()"
+              class="bg-primary hover:bg-primaryDark text-white text-xs px-2.5 py-1.5 rounded-lg font-semibold shadow transition">
+              <i class="fa-solid fa-plus mr-1"></i> Chat Baru
+            </button>
+          </div>
+          <div id="chatHistoryList" class="flex-grow overflow-y-auto p-2 space-y-1.5 text-xs">
+            <!-- Daftar riwayat sesi chat -->
+          </div>
+        </div>
+
+        <!-- AREA RUANG CHAT UTAMA -->
+        <div class="flex-grow flex flex-col bg-white">
+          <div id="aiChatBox" class="flex-grow overflow-y-auto space-y-4 p-4 bg-slate-50/50 text-sm">
+            <!-- Pesan percakapan -->
+          </div>
+          <div class="p-4 border-t border-slate-200 bg-white flex gap-2 items-center">
+            <input type="text" id="aiUserInput"
+              placeholder="Tanya AI seputar troubleshooting atau cari riwayat data perbaikan..."
+              class="flex-grow border border-slate-300 rounded-lg p-3 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              onkeypress="if(event.key==='Enter') sendAiQuery()">
+            <button onclick="sendAiQuery()"
+              class="bg-primary hover:bg-primaryDark text-white px-5 py-3 rounded-lg text-sm font-bold shadow transition flex items-center space-x-1.5">
+              <span>Kirim</span>
+              <i class="fa-solid fa-paper-plane text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- SCRIPT UTAMA & ENGINE REAKTIF -->
+  <script>
+    const AUTH_CONFIG = {
+      adminPassword: 'admin123',
+      teknisiPassword: 'teknisi123'
+    };
+
+    const VALID_TPS_UNITS = ['CC01', 'CC02', 'CC03', 'CC04', 'CC06', 'CC08', 'CC09', 'CC10', 'CC14', 'CC15', 'CC16', 'CC21', 'CC22', 'CC23', 'CC24', 'CC25'];
+
+    let uploadedDataStore = JSON.parse(localStorage.getItem('tps_uploaded_store_v24') || '{}');
+    let currentUserRole = localStorage.getItem('tps_current_role') || null;
+    let currentUsername = localStorage.getItem('tps_current_username') || "Teknisi_TPS";
+
+    let allUserChatSessions = JSON.parse(localStorage.getItem('tps_chat_sessions_v1') || '{}');
+    let activeSessionId = localStorage.getItem('tps_active_session_id') || null;
+
+    function saveStore() { localStorage.setItem('tps_uploaded_store_v24', JSON.stringify(uploadedDataStore)); }
+    function saveChatSessions() { localStorage.setItem('tps_chat_sessions_v1', JSON.stringify(allUserChatSessions)); }
+
+    function updateClock() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const clockEl = document.getElementById('headerClock');
+      if (clockEl) clockEl.innerText = `${hours}:${minutes}:${seconds} WIB`;
+    }
+    setInterval(updateClock, 1000);
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const role = document.getElementById('loginRole').value;
+      const uname = document.getElementById('loginUsername').value.trim();
+      const pass = document.getElementById('loginPassword').value;
+
+      if (role === 'admin' && pass === AUTH_CONFIG.adminPassword) {
+        currentUserRole = 'admin';
+      } else if (role === 'teknisi' && pass === AUTH_CONFIG.teknisiPassword) {
+        currentUserRole = 'teknisi';
+      } else {
+        alert('Kata sandi salah! Silakan periksa kembali.');
+        return;
+      }
+
+      currentUsername = uname || "User_" + role;
+      localStorage.setItem('tps_current_role', currentUserRole);
+      localStorage.setItem('tps_current_username', currentUsername);
+
+      document.getElementById('loginModal').classList.add('hidden');
+      applyRolePermissions();
+      initUserChatSessions();
+      showToast(`Halo ${currentUsername}, selamat bertugas!`);
+    }
+
+    function logoutSystem() {
+      if (confirm('Keluar dari sesi ini?')) {
+        localStorage.removeItem('tps_current_role');
+        localStorage.removeItem('tps_current_username');
+        localStorage.removeItem('tps_active_session_id');
+        location.reload();
+      }
+    }
+
+    function applyRolePermissions() {
+      const roleNameEl = document.getElementById('userProfileName');
+      const roleDescEl = document.getElementById('userProfileRole');
+      const resetBtn = document.getElementById('resetDataBtn');
+      const actionControls = document.getElementById('headerActionControls');
+      const navbarMenu = document.getElementById('headerNavbarMenu');
+      const initialBadge = document.getElementById('userInitialBadge');
+
+      if (actionControls) actionControls.classList.remove('hidden');
+      if (actionControls) actionControls.classList.add('flex');
+      if (navbarMenu) navbarMenu.classList.remove('hidden');
+
+      roleNameEl.innerText = currentUsername;
+      if (initialBadge) initialBadge.innerText = currentUsername.substring(0, 2).toUpperCase();
+
+      if (currentUserRole === 'admin') {
+        roleDescEl.innerText = "Administrator";
+        if (resetBtn) resetBtn.classList.remove('hidden');
+      } else {
+        roleDescEl.innerText = "Teknisi Lapangan";
+        if (resetBtn) resetBtn.classList.add('hidden');
+      }
+    }
+
+    function toggleInputDropdown(e) {
+      e.stopPropagation();
+      const menu = document.getElementById('inputDropdownMenu');
+      menu.classList.toggle('hidden');
+    }
+
+    window.addEventListener('click', () => {
+      const menu = document.getElementById('inputDropdownMenu');
+      if (menu && !menu.classList.contains('hidden')) menu.classList.add('hidden');
+    });
+
+    function openUploadModal() { document.getElementById('uploadModal').classList.remove('hidden'); }
+    function closeUploadModal() { document.getElementById('uploadModal').classList.add('hidden'); }
+    function openManualModal() { document.getElementById('manualModal').classList.remove('hidden'); }
+    function closeManualModal() { document.getElementById('manualModal').classList.add('hidden'); }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-section').forEach(sec => sec.classList.add('hidden'));
+      const target = document.getElementById('section-' + tabId);
+      if (target) target.classList.remove('hidden');
+
+      document.querySelectorAll('.nav-link-btn').forEach(btn => btn.classList.remove('nav-active'));
+      const activeBtn = document.getElementById('nav-btn-' + tabId);
+      if (activeBtn) activeBtn.classList.add('nav-active');
+
+      if (tabId === 'files') renderFileArchiveTable();
+      if (tabId === 'ai') { renderChatHistorySidebar(); renderActiveChatMessages(); }
+      if (['dashboard', 'analytics', 'units'].includes(tabId)) {
+        window.dispatchEvent(new Event('resize'));
+        applyGlobalFilter();
+      }
+    }
+
+    function hasAnyData() { return Object.keys(uploadedDataStore).length > 0; }
+
+    function renderUI() {
+      const statusBadge = document.getElementById('dataStatusBadge');
+      if (!hasAnyData()) {
+        statusBadge.className = "bg-slate-600 text-white text-xs px-2.5 py-1 rounded-full font-medium";
+        statusBadge.innerText = "BELUM ADA DATA (0)";
+        document.getElementById('activeFileIndicator').innerText = "Status: Belum ada file yang diunggah";
+        document.getElementById('cardTotalCrane').innerText = "0";
+        document.getElementById('cardTotalBoxes').innerText = "0";
+        document.getElementById('cardTotalBD').innerText = "0";
+        document.getElementById('cardTotalMmbf').innerText = "0";
+        document.getElementById('cardTotalDowntime').innerText = "0 Jam";
+        document.getElementById('unitTableBody').innerHTML = VALID_TPS_UNITS.map(u => `<tr class="border-b"><td class="p-3 font-bold text-primary">${u}</td><td class="p-3 text-slate-700">Container Crane Unit ${u}</td><td class="p-3 text-slate-400">Belum ada data operasional</td></tr>`).join('');
+        document.getElementById('woTableBody').innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400">- Belum Ada Data Aktual -</td></tr>`;
+        renderCharts();
+        return;
+      }
+      statusBadge.className = "bg-emerald-600 text-white text-xs px-2.5 py-1 rounded-full font-medium";
+      statusBadge.innerText = "DATA AKTIF";
+      applyGlobalFilter();
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toastNotification');
+      document.getElementById('toastMessage').innerText = msg;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+    }
+
+    function normalizeUnitAsset(rawAsset) {
+      if (!rawAsset) return null;
+      let str = String(rawAsset).toUpperCase().trim();
+      for (let u of VALID_TPS_UNITS) {
+        if (str.includes(u) || str.includes(u.replace('CC', 'QC'))) return u;
+      }
+      return null;
+    }
+
+    function parseValidDate(rawDate, defaultYear = '2026') {
+      if (!rawDate) return `${defaultYear}-01-01`;
+      let str = String(rawDate).trim();
+      if (!isNaN(str) && Number(str) > 30000) {
+        let utc_days = Math.floor(Number(str) - 25569);
+        let date_info = new Date(utc_days * 86400 * 1000);
+        let y = date_info.getFullYear();
+        let m = String(date_info.getMonth() + 1).padStart(2, '0');
+        let d = String(date_info.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+      let cleaned = str.split('T')[0].split(' ')[0];
+      if (cleaned.length >= 8) return cleaned;
+      return `${defaultYear}-01-01`;
+    }
+
+    function submitManualForm(e) {
+      e.preventDefault();
+      const date = document.getElementById('manDate').value;
+      const year = date.split('-')[0] || "2026";
+      const monthNum = date.split('-')[1] || "01";
+      const dayStr = date.split('-')[2] || "01";
+      const dayIdx = parseInt(dayStr, 10) - 1;
+      const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+      const monthName = months[parseInt(monthNum, 10) - 1] || "Januari";
+
+      const crane = document.getElementById('manCrane').value;
+      const customWoNum = document.getElementById('manWoNum').value.trim();
+      const subsystem = document.getElementById('manSubsystem').value;
+      const desc = document.getElementById('manDesc').value;
+      const downtime = parseFloat(document.getElementById('manDowntime').value) || 0;
+      const boxes = parseFloat(document.getElementById('manBoxes').value) || 0;
+
+      let key = `${year}-${monthName}`;
+      if (!uploadedDataStore[key]) {
+        uploadedDataStore[key] = {
+          fileName: `Manual Input (${monthName} ${year})`, month: monthName, year: year, units: [crane],
+          totalCC: 1, boxes: 0, bd: 0, mmbf: 0, downtime: 0, workOrders: [],
+          boxesPerCC: {}, timeOpPerCC: {}, bdPerCC: {}, dtPerCC: {},
+          boxesDailyPerCC: {}, timeOpDailyPerCC: {}, bdDailyPerCC: {}
+        };
+        VALID_TPS_UNITS.forEach(u => {
+          uploadedDataStore[key].boxesPerCC[u] = 0; uploadedDataStore[key].timeOpPerCC[u] = 0; uploadedDataStore[key].bdPerCC[u] = 0; uploadedDataStore[key].dtPerCC[u] = 0;
+          uploadedDataStore[key].boxesDailyPerCC[u] = new Array(31).fill(0); uploadedDataStore[key].timeOpDailyPerCC[u] = new Array(31).fill(0); uploadedDataStore[key].bdDailyPerCC[u] = new Array(31).fill(0);
+        });
+      }
+
+      let ds = uploadedDataStore[key];
+      ds.boxes += boxes; ds.bd += 1; ds.downtime += downtime;
+      ds.mmbf = Math.round(ds.boxes / ds.bd);
+      if (!ds.units.includes(crane)) ds.units.push(crane);
+
+      ds.boxesPerCC[crane] += boxes; ds.bdPerCC[crane] += 1; ds.dtPerCC[crane] += downtime;
+      ds.boxesDailyPerCC[crane][dayIdx] += boxes; ds.bdDailyPerCC[crane][dayIdx] += 1;
+
+      ds.workOrders.push({
+        tanggal: parseValidDate(date, year), woNum: customWoNum, desc: desc,
+        type: "Breakdown", asset: crane, durasiStr: downtime + " Jam", durasiNum: downtime, task: subsystem
+      });
+
+      saveStore(); closeManualModal(); renderUI();
+      showToast('Data manual berhasil disimpan ke database!');
+    }
+
+    function processUploadedFile() {
+      const fileInput = document.getElementById('actualFileInput');
+      const yearSel = document.getElementById('uploadYear').value;
+      const monthSel = document.getElementById('uploadMonth').value;
+
+      if (fileInput.files.length === 0) return alert('Pilih berkas Excel terlebih dahulu!');
+
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+
+      reader.onload = function (e) {
+        try {
+          const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+
+          let boxesPerCC = {}; let timeOpPerCC = {}; let bdPerCC = {}; let dtPerCC = {};
+          let boxesDailyPerCC = {}; let timeOpDailyPerCC = {}; let bdDailyPerCC = {};
+
+          VALID_TPS_UNITS.forEach(u => {
+            boxesPerCC[u] = 0; timeOpPerCC[u] = 0; bdPerCC[u] = 0; dtPerCC[u] = 0;
+            boxesDailyPerCC[u] = new Array(31).fill(0); timeOpDailyPerCC[u] = new Array(31).fill(0); bdDailyPerCC[u] = new Array(31).fill(0);
+          });
+
+          let maxDays = 31;
+          if (['April', 'Juni', 'September', 'November'].includes(monthSel)) maxDays = 30;
+          else if (monthSel === 'Februari') maxDays = (parseInt(yearSel) % 4 === 0) ? 29 : 28;
+
+          let summarySheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('summary') || n.toLowerCase().includes('performance'));
+
+          if (summarySheetName) {
+            let sumJson = XLSX.utils.sheet_to_json(workbook.Sheets[summarySheetName], { header: 1 });
+            let currentSection = '';
+
+            for (let r = 0; r < sumJson.length; r++) {
+              let row = sumJson[r];
+              if (!row || !row[0]) continue;
+              let col0 = String(row[0]).trim().toUpperCase();
+
+              if (col0.includes('BOXES / PRODUKSI') || col0 === 'BOXES') { currentSection = 'BOXES'; continue; }
+              if (col0.includes('TIME OPERATION')) { currentSection = 'TIME'; continue; }
+              if (col0.includes('NUMBER OF BREAKDOWN') || col0 === 'BREAKDOWN') { currentSection = 'BREAKDOWN'; continue; }
+
+              if (['BOXES', 'TIME', 'BREAKDOWN'].includes(currentSection)) {
+                let unitMatch = normalizeUnitAsset(col0);
+                if (unitMatch && col0.length <= 6) {
+                  for (let c = 1; c <= maxDays; c++) {
+                    let val = parseFloat(row[c]);
+                    if (!isNaN(val)) {
+                      if (currentSection === 'BOXES') { boxesPerCC[unitMatch] += val; boxesDailyPerCC[unitMatch][c - 1] += val; }
+                      else if (currentSection === 'TIME') { timeOpPerCC[unitMatch] += val; timeOpDailyPerCC[unitMatch][c - 1] += val; }
+                      else if (currentSection === 'BREAKDOWN') { bdPerCC[unitMatch] += val; bdDailyPerCC[unitMatch][c - 1] += val; }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          let totalBoxes = Object.values(boxesPerCC).reduce((a, b) => a + b, 0);
+          let breakdownCount = Object.values(bdPerCC).reduce((a, b) => a + b, 0);
+          let totalDowntime = 0;
+          let parsedWorkOrders = [];
+
+          let woSheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('work order') || n.toLowerCase().includes('wo'));
+          if (woSheetName) {
+            let woRawJson = XLSX.utils.sheet_to_json(workbook.Sheets[woSheetName]);
+            woRawJson.forEach(row => {
+              let woNum = row['Work Order'] || row['Order'] || row['WO'] || row['No WO'];
+              if (woNum) {
+                let desc = String(row['Description'] || row['Short Text'] || row['Problem'] || '-');
+                let rawAsset = String(row['Asset'] || row['Equipment'] || row['Asset2'] || row['Unit'] || '');
+                let normalizedAsset = normalizeUnitAsset(rawAsset);
+                if (!normalizedAsset) return;
+
+                let durasi = row['DURATION'] || row['Duration'] || row['Durasi'] || 0;
+                let durasiNum = typeof durasi === 'number' ? durasi * 24 : parseFloat(durasi) || 0;
+                totalDowntime += durasiNum; dtPerCC[normalizedAsset] += durasiNum;
+
+                let durasiStr = typeof durasi === 'number' ? `${durasiNum.toFixed(1)} Jam` : String(durasi);
+                let rawDate = row['Doc. date'] || row['DOC DATE/ SCH DATE'] || row['Date'] || `${yearSel}-01-01`;
+
+                let sysText = (String(row['Problem Code'] || '') + " " + String(row['TASK'] || '') + " " + desc).toUpperCase();
+                let taskStr = 'OTHER SYSTEM';
+                if (sysText.includes('SPD') || sysText.includes('SPRE') || sysText.includes('FLIP')) taskStr = 'SPREADER SYSTEM';
+                else if (sysText.includes('TRL') || sysText.includes('TROL')) taskStr = 'TROLLEY SYSTEM';
+                else if (sysText.includes('GTR') || sysText.includes('GANT') || sysText.includes('TRAVEL')) taskStr = 'GANTRY SYSTEM';
+                else if (sysText.includes('TLS') || sysText.includes('TRIM') || sysText.includes('SKEW') || sysText.includes('LIST')) taskStr = 'TRIM LIST SKEW SYSTEM';
+                else if (sysText.includes('HST') || sysText.includes('HOIS')) taskStr = 'HOIST SYSTEM';
+                else if (sysText.includes('ELC') || sysText.includes('ELEV') || sysText.includes('CAB') || sysText.includes('LIGHT') || sysText.includes('POWER')) taskStr = 'ELECTRIC CONTROL SYSTEM';
+
+                parsedWorkOrders.push({
+                  tanggal: parseValidDate(rawDate, yearSel), woNum: String(woNum), desc: desc, type: String(row['Work Type'] || 'Breakdown'),
+                  asset: normalizedAsset, durasiStr: durasiStr, durasiNum: durasiNum, task: taskStr
+                });
+              }
+            });
+          }
+
+          let mmbfVal = breakdownCount > 0 ? Math.round(totalBoxes / breakdownCount) : totalBoxes;
+
+          uploadedDataStore[`${yearSel}-${monthSel}`] = {
+            fileName: file.name, month: monthSel, year: yearSel, units: VALID_TPS_UNITS,
+            totalCC: VALID_TPS_UNITS.length, boxes: totalBoxes, bd: breakdownCount, mmbf: mmbfVal, downtime: totalDowntime, workOrders: parsedWorkOrders,
+            boxesPerCC: boxesPerCC, timeOpPerCC: timeOpPerCC, bdPerCC: bdPerCC, dtPerCC: dtPerCC,
+            boxesDailyPerCC: boxesDailyPerCC, timeOpDailyPerCC: timeOpDailyPerCC, bdDailyPerCC: bdDailyPerCC
+          };
+
+          saveStore(); closeManualModal(); renderUI();
+          showToast(`Parser Sukses: Ditemukan ${totalBoxes.toLocaleString('id-ID')} Boxes di ${monthSel} ${yearSel}.`);
+        } catch (err) {
+          console.error(err); alert("Gagal memparsing file Excel.");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function verifyAdminAction(callback) {
+      if (currentUserRole !== 'admin') {
+        alert('Akses Ditolak! Khusus Administrator.');
+        return;
+      }
+      let pin = prompt('Masukkan password admin:');
+      if (pin === AUTH_CONFIG.adminPassword) callback();
+      else if (pin !== null) alert('Password salah!');
+    }
+
+    function resetData() {
+      verifyAdminAction(() => {
+        if (confirm('Reset seluruh database arsip?')) {
+          uploadedDataStore = {}; saveStore(); renderUI();
+          showToast('Database di-reset.');
+        }
+      });
+    }
+
+    function deleteFileRecord(k) {
+      verifyAdminAction(() => {
+        if (confirm('Hapus arsip ini?')) {
+          delete uploadedDataStore[k]; saveStore(); renderFileArchiveTable(); renderUI();
+          showToast('Arsip dihapus.');
+        }
+      });
+    }
+
+    function applyGlobalFilter() {
+      const sMonth = document.getElementById('filterMonth').value;
+      const sYear = document.getElementById('filterYear').value;
+      const sCrane = document.getElementById('filterCrane').value;
+      const singleDate = document.getElementById('filterSingleDate').value;
+
+      if (!hasAnyData()) { renderCharts(); return; }
+
+      let tBox = 0, tBd = 0, tDt = 0;
+      let activeWO = []; let indText = "";
+      let activeUnitSet = new Set();
+
+      for (let k in uploadedDataStore) {
+        let d = uploadedDataStore[k];
+        if (d.year === sYear) {
+          if (sMonth === 'ALL' || d.month === sMonth) {
+            for (let u of VALID_TPS_UNITS) {
+              if ((d.boxesPerCC && d.boxesPerCC[u] > 0) || (d.bdPerCC && d.bdPerCC[u] > 0)) activeUnitSet.add(u);
+            }
+            if (sCrane === 'ALL') { tBox += d.boxes || 0; tBd += d.bd || 0; tDt += d.downtime || 0; }
+            else {
+              let targetUnit = sCrane.toUpperCase().trim();
+              tBox += (d.boxesPerCC && d.boxesPerCC[targetUnit]) || 0; tBd += (d.bdPerCC && d.bdPerCC[targetUnit]) || 0; tDt += (d.dtPerCC && d.dtPerCC[targetUnit]) || 0;
+            }
+            if (d.workOrders) activeWO = activeWO.concat(d.workOrders);
+          }
+        }
+      }
+
+      let activeCCArray = Array.from(activeUnitSet).sort();
+      let displayUnitCount = activeCCArray.length;
+
+      if (sCrane !== 'ALL') {
+        let targetUnit = sCrane.toUpperCase().trim();
+        activeWO = activeWO.filter(w => normalizeUnitAsset(w.asset) === targetUnit);
+        displayUnitCount = 1;
+        indText = `Tahun ${sYear} (${sMonth}) | Filter Unit: ${targetUnit}`;
+      } else {
+        indText = `Arsip Terpusat Tahun ${sYear} (${sMonth})`;
+      }
+
+      if (singleDate) {
+        activeWO = activeWO.filter(w => w.tanggal === singleDate);
+        tBd = activeWO.length;
+        tDt = activeWO.reduce((sum, w) => sum + (w.durasiNum || 0), 0);
+        indText += ` | Tgl: ${singleDate}`;
+      }
+
+      let tMmbf = tBd > 0 ? Math.round(tBox / tBd) : tBox;
+
+      document.getElementById('activeFileIndicator').innerText = indText;
+      document.getElementById('cardTotalCrane').innerText = displayUnitCount;
+      document.getElementById('cardTotalBoxes').innerText = tBox > 0 ? tBox.toLocaleString('id-ID') : "0";
+      document.getElementById('cardTotalBD').innerText = tBd > 0 ? tBd.toLocaleString('id-ID') : "0";
+      document.getElementById('cardTotalMmbf').innerText = tMmbf > 0 ? tMmbf.toLocaleString('id-ID') : "0";
+      document.getElementById('cardTotalDowntime').innerText = tDt > 0 ? tDt.toFixed(1) + " Jam" : "0 Jam";
+
+      renderUnitMasterTable(activeCCArray);
+
+      document.getElementById('woTableBody').innerHTML = activeWO.length ?
+        activeWO.map((w, idx) => `
+          <tr class="border-b hover:bg-slate-50 text-xs">
+            <td class="p-3 text-center font-mono font-semibold">${idx + 1}</td>
+            <td class="p-3 font-mono text-slate-700">${w.tanggal}</td>
+            <td class="p-3 font-bold text-primary font-mono">${w.woNum}</td>
+            <td class="p-3 text-slate-700">${w.desc}</td>
+            <td class="p-3"><span class="${w.type.toLowerCase().includes('breakdown') ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'} px-2 py-0.5 rounded text-[10px] font-bold">${w.type}</span></td>
+            <td class="p-3 font-bold">${w.asset}</td>
+            <td class="p-3 font-mono">${w.durasiStr}</td>
+            <td class="p-3 text-slate-600 font-semibold">${w.task}</td>
+          </tr>
+        `).join('') :
+        `<tr><td colspan="8" class="p-6 text-center text-slate-400">Tidak ada Work Order pada filter tersebut</td></tr>`;
+
+      renderCharts(sYear, sMonth, activeWO, activeCCArray);
+    }
+
+    function renderUnitMasterTable(activeCCArray) {
+      const tb = document.getElementById('unitTableBody');
+      if (!tb) return;
+      tb.innerHTML = VALID_TPS_UNITS.map(u => {
+        let isActive = activeCCArray.includes(u);
+        return `<tr class="border-b ${isActive ? '' : 'opacity-40'}"><td class="p-3 font-bold text-primary">${u}</td><td class="p-3 text-slate-700">Container Crane Unit ${u}</td><td class="p-3"><span class="${isActive ? 'text-emerald-600 font-bold' : 'text-slate-400'}">${isActive ? 'Data Ditemukan' : 'Kosong'}</span></td></tr>`;
+      }).join('');
+    }
+
+    function calculateCustomMax(maxVal, stepSize) {
+      if (!maxVal || maxVal <= 0) return stepSize * 4;
+      return Math.ceil(maxVal / stepSize) * stepSize;
+    }
+
+    function renderCharts(sYear = '2026', sMonth = 'ALL', activeWO = [], activeCCArray = VALID_TPS_UNITS) {
+      const subEl = document.getElementById('chartSubtitle');
+      if (subEl) subEl.innerText = `Tahun ${sYear} (${sMonth})`;
+
+      let chartLabels = []; let chartBox = []; let chartBd = []; let chartMmbf = [];
+
+      if (sMonth === 'ALL') {
+        chartLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        chartBox = new Array(12).fill(0); chartBd = new Array(12).fill(0); chartMmbf = new Array(12).fill(0);
+        const mNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+        for (let k in uploadedDataStore) {
+          let item = uploadedDataStore[k];
+          if (item.year === sYear) {
+            let idx = mNames.indexOf(item.month);
+            if (idx !== -1) {
+              activeCCArray.forEach(u => {
+                chartBox[idx] += (item.boxesPerCC && item.boxesPerCC[u]) || 0;
+                chartBd[idx] += (item.bdPerCC && item.bdPerCC[u]) || 0;
+              });
+              chartMmbf[idx] = chartBd[idx] > 0 ? Math.round(chartBox[idx] / chartBd[idx]) : chartBox[idx];
+            }
+          }
+        }
+      } else {
+        let maxDaysInMonth = 31;
+        if (['April', 'Juni', 'September', 'November'].includes(sMonth)) maxDaysInMonth = 30;
+        else if (sMonth === 'Februari') maxDaysInMonth = (parseInt(sYear) % 4 === 0) ? 29 : 28;
+
+        chartLabels = Array.from({ length: maxDaysInMonth }, (_, i) => String(i + 1));
+        chartBox = new Array(maxDaysInMonth).fill(0); chartBd = new Array(maxDaysInMonth).fill(0); chartMmbf = new Array(maxDaysInMonth).fill(0);
+        let targetD = uploadedDataStore[`${sYear}-${sMonth}`];
+        if (targetD) {
+          for (let i = 0; i < maxDaysInMonth; i++) {
+            let sumBox = 0; let sumBd = 0;
+            activeCCArray.forEach(u => {
+              if (targetD.boxesDailyPerCC && targetD.boxesDailyPerCC[u]) sumBox += targetD.boxesDailyPerCC[u][i];
+              if (targetD.bdDailyPerCC && targetD.bdDailyPerCC[u]) sumBd += targetD.bdDailyPerCC[u][i];
+            });
+            chartBox[i] = sumBox; chartBd[i] = sumBd;
+            chartMmbf[i] = sumBd > 0 ? Math.round(sumBox / sumBd) : sumBox;
+          }
+        }
+      }
+
+      const ctxMain = document.getElementById('mainTrendChart');
+      if (ctxMain) {
+        if (window.myChartInstance) window.myChartInstance.destroy();
+        let maxBdVal = Math.max(...chartBd, 20); let maxMmbfVal = Math.max(...chartMmbf, 500);
+        let bdMaxScaled = calculateCustomMax(maxBdVal, maxBdVal < 20 ? 5 : 50);
+        let mmbfMaxScaled = calculateCustomMax(maxMmbfVal, 500);
+
+        window.myChartInstance = new Chart(ctxMain.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: chartLabels,
+            datasets: [
+              { label: 'Produksi (Boxes)', data: chartBox, borderColor: '#0284c7', backgroundColor: 'rgba(2,132,199,0.1)', fill: true, yAxisID: 'y', tension: 0, borderWidth: 3, pointRadius: 4 },
+              { label: 'Breakdown (BD)', data: chartBd, borderColor: '#f97316', backgroundColor: 'transparent', yAxisID: 'y1', tension: 0, borderWidth: 2, pointRadius: 4 },
+              { label: 'MMBF', data: chartMmbf, borderColor: '#10b981', backgroundColor: 'transparent', yAxisID: 'y2', tension: 0, borderWidth: 2, pointRadius: 4 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+            scales: {
+              y: { type: 'linear', display: true, position: 'left', beginAtZero: true, title: { display: true, text: 'Produksi (Boxes)', color: '#0284c7', font: { weight: 'bold' } }, ticks: { color: '#0284c7' } },
+              y1: { type: 'linear', display: true, position: 'right', beginAtZero: true, max: bdMaxScaled, grid: { drawOnChartArea: false }, title: { display: true, text: 'Breakdown (Freq)', color: '#f97316', font: { weight: 'bold' } }, ticks: { color: '#f97316', stepSize: bdMaxScaled / 5 } },
+              y2: { type: 'linear', display: true, position: 'right', beginAtZero: true, max: mmbfMaxScaled, grid: { drawOnChartArea: false }, title: { display: true, text: 'MMBF Skala', color: '#10b981', font: { weight: 'bold' } }, ticks: { color: '#10b981', stepSize: mmbfMaxScaled / 5 } }
+            }
+          }
+        });
+      }
+
+      let unitBoxesMap = {}; let unitBdCountMap = {}; let unitTimeOpMap = {}; let subsystemCountMap = {};
+      VALID_TPS_UNITS.forEach(u => { unitBoxesMap[u] = 0; unitBdCountMap[u] = 0; unitTimeOpMap[u] = 0; });
+
+      for (let k in uploadedDataStore) {
+        let d = uploadedDataStore[k];
+        if (d.year === sYear && (sMonth === 'ALL' || d.month === sMonth)) {
+          activeCCArray.forEach(u => {
+            unitBoxesMap[u] += (d.boxesPerCC && d.boxesPerCC[u]) || 0;
+            unitTimeOpMap[u] += (d.timeOpPerCC && d.timeOpPerCC[u]) || 0;
+            unitBdCountMap[u] += (d.bdPerCC && d.bdPerCC[u]) || 0;
+          });
+        }
+      }
+
+      activeWO.forEach(w => { let sys = w.task || 'OTHER SYSTEM'; subsystemCountMap[sys] = (subsystemCountMap[sys] || 0) + 1; });
+
+      let ccBoxes = activeCCArray.map(u => unitBoxesMap[u] || 0);
+      let ccMtbf = activeCCArray.map(u => unitBdCountMap[u] > 0 ? parseFloat((unitTimeOpMap[u] / unitBdCountMap[u]).toFixed(2)) : parseFloat((unitTimeOpMap[u] || 0).toFixed(2)));
+      let ccMmbf = activeCCArray.map(u => unitBdCountMap[u] > 0 ? Math.round(unitBoxesMap[u] / unitBdCountMap[u]) : (unitBoxesMap[u] || 0));
+
+      if (document.getElementById('gridBarBoxes')) {
+        if (window.myGB1) window.myGB1.destroy();
+        window.myGB1 = new Chart(document.getElementById('gridBarBoxes').getContext('2d'), {
+          type: 'bar', data: { labels: activeCCArray, datasets: [{ label: 'Produksi (Boxes)', data: ccBoxes, backgroundColor: '#0284c7', borderRadius: 0 }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+      }
+
+      if (document.getElementById('gridBarTimeOp')) {
+        if (window.myGB2) window.myGB2.destroy();
+        window.myGB2 = new Chart(document.getElementById('gridBarTimeOp').getContext('2d'), {
+          type: 'bar', data: { labels: activeCCArray, datasets: [{ label: 'MTBF', data: ccMtbf, backgroundColor: '#0f766e', borderRadius: 0 }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+      }
+
+      if (document.getElementById('gridBarMmbf')) {
+        if (window.myGB3) window.myGB3.destroy();
+        window.myGB3 = new Chart(document.getElementById('gridBarMmbf').getContext('2d'), {
+          type: 'bar', data: { labels: activeCCArray, datasets: [{ label: 'MMBF', data: ccMmbf, backgroundColor: '#4338ca', borderRadius: 0 }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+      }
+
+      if (document.getElementById('gridPieBig6')) {
+        if (window.myGP) window.myGP.destroy();
+        let big6Labels = Object.keys(subsystemCountMap); let big6Data = Object.values(subsystemCountMap);
+        if (big6Labels.length === 0) { big6Labels = ['0 Data/Tidak Ada WO']; big6Data = [1]; }
+
+        const donutColors = {
+          'SPREADER SYSTEM': '#0284c7', 'TROLLEY SYSTEM': '#0ea5e9', 'GANTRY SYSTEM': '#64748b',
+          'TRIM LIST SKEW SYSTEM': '#eab308', 'HOIST SYSTEM': '#4f46e5', 'ELECTRIC CONTROL SYSTEM': '#10b981',
+          'OTHER SYSTEM': '#475569', '0 Data/Tidak Ada WO': '#e2e8f0'
+        };
+        const mappedColors = big6Labels.map(l => donutColors[l] || '#94a3b8');
+
+        window.myGP = new Chart(document.getElementById('gridPieBig6').getContext('2d'), {
+          type: 'doughnut', data: { labels: big6Labels, datasets: [{ data: big6Data, backgroundColor: mappedColors, borderWidth: 1, borderColor: '#ffffff' }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } } } }
+        });
+      }
+    }
+
+    function renderFileArchiveTable() {
+      const tb = document.getElementById('fileArchiveTableBody');
+      let keys = Object.keys(uploadedDataStore);
+      if (!keys.length) return tb.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">Belum ada arsip database</td></tr>`;
+
+      tb.innerHTML = keys.map(k => {
+        let i = uploadedDataStore[k];
+        let deleteBtnHtml = (currentUserRole === 'admin')
+          ? `<button onclick="deleteFileRecord('${k}')" class="bg-red-600 hover:bg-red-700 text-white text-[10px] px-3 py-1.5 rounded shadow">Hapus</button>`
+          : `<span class="text-slate-400 text-xs italic">Khusus Admin</span>`;
+        return `<tr class="border-b"><td class="p-3 font-bold text-primary text-xs">${i.fileName}</td><td class="p-3 text-xs font-semibold">${i.month} ${i.year}</td><td class="p-3 text-xs">${(i.boxes || 0).toLocaleString('id-ID')}</td><td class="p-3 text-xs text-rose-600 font-bold">${i.bd || 0} BD</td><td class="p-3">${deleteBtnHtml}</td></tr>`;
+      }).join('');
+    }
+
+    // ==========================================
+    // MANAJEMEN RIWAYAT CHAT PER AKUN (MULTI-SESSION)
+    // ==========================================
+    function initUserChatSessions() {
+      if (!allUserChatSessions[currentUsername]) allUserChatSessions[currentUsername] = [];
+      let userSessions = allUserChatSessions[currentUsername];
+      if (userSessions.length === 0 || !activeSessionId) {
+        createNewChatSession();
+      } else {
+        if (!userSessions.some(s => s.id === activeSessionId)) activeSessionId = userSessions[0].id;
+      }
+      localStorage.setItem('tps_active_session_id', activeSessionId);
+      renderChatHistorySidebar();
+      renderActiveChatMessages();
+    }
+
+    function createNewChatSession() {
+      if (!allUserChatSessions[currentUsername]) allUserChatSessions[currentUsername] = [];
+      let newId = 'session_' + Date.now();
+      let newSession = {
+        id: newId,
+        title: 'Percakapan Baru',
+        messages: [
+          { sender: 'ai', text: `Halo Rekan Teknisi <b>${currentUsername}</b>! Ada kendala teknis apa di operasional Container Crane hari ini? Silakan sampaikan detail problem atau Work Order yang sedang Anda tangani.` }
+        ]
+      };
+      allUserChatSessions[currentUsername].unshift(newSession);
+      activeSessionId = newId;
+      localStorage.setItem('tps_active_session_id', activeSessionId);
+      saveChatSessions();
+      renderChatHistorySidebar();
+      renderActiveChatMessages();
+    }
+
+    function switchChatSession(sessionId) {
+      activeSessionId = sessionId;
+      localStorage.setItem('tps_active_session_id', activeSessionId);
+      renderChatHistorySidebar();
+      renderActiveChatMessages();
+    }
+
+    function deleteChatSession(sessionId, event) {
+      event.stopPropagation();
+      if (!confirm('Hapus sesi riwayat chat ini?')) return;
+      let userSessions = allUserChatSessions[currentUsername];
+      allUserChatSessions[currentUsername] = userSessions.filter(s => s.id !== sessionId);
+      if (allUserChatSessions[currentUsername].length === 0) createNewChatSession();
+      else if (activeSessionId === sessionId) activeSessionId = allUserChatSessions[currentUsername][0].id;
+      saveChatSessions();
+      renderChatHistorySidebar();
+      renderActiveChatMessages();
+    }
+
+    function renderChatHistorySidebar() {
+      const listEl = document.getElementById('chatHistoryList');
+      if (!listEl) return;
+      let userSessions = allUserChatSessions[currentUsername] || [];
+      if (userSessions.length === 0) {
+        listEl.innerHTML = `<p class="text-slate-400 text-center py-4">Belum ada riwayat</p>`;
+        return;
+      }
+      listEl.innerHTML = userSessions.map(s => `
+        <div onclick="switchChatSession('${s.id}')" class="p-2.5 rounded-lg cursor-pointer flex justify-between items-center transition ${s.id === activeSessionId ? 'bg-primary text-white font-semibold shadow-sm' : 'hover:bg-slate-200 text-slate-700'}">
+          <div class="truncate pr-2"><i class="fa-regular fa-message mr-1.5"></i> ${s.title}</div>
+          <button onclick="deleteChatSession('${s.id}', event)" class="text-slate-400 hover:text-red-500 p-1"><i class="fa-solid fa-trash-can text-[10px]"></i></button>
+        </div>
+      `).join('');
+    }
+
+    function renderActiveChatMessages() {
+      const chatBox = document.getElementById('aiChatBox');
+      if (!chatBox) return;
+      let userSessions = allUserChatSessions[currentUsername] || [];
+      let currentSession = userSessions.find(s => s.id === activeSessionId);
+      if (!currentSession) return;
+
+      chatBox.innerHTML = currentSession.messages.map(m => {
+        if (m.sender === 'user') {
+          return `<div class="flex items-start gap-3 justify-end"><div class="bg-primary text-white p-3 rounded-xl rounded-tr-none shadow-sm max-w-[85%]" style="word-break: break-word;">${m.text}</div></div>`;
+        } else {
+          return `
+            <div class="flex items-start gap-3">
+              <div class="bg-primary text-white p-2 rounded-full"><i class="fa-solid fa-robot"></i></div>
+              <div class="bg-white border text-slate-700 p-3.5 rounded-xl rounded-tl-none shadow-sm max-w-[85%] space-y-2" style="word-break: break-word; line-height: 1.6;">
+                <div>${m.text}</div>
+                <p class="text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-100 mt-2">💡 AI Partner Senior Engineer TPS</p>
+              </div>
+          </div>`;
+        }
+      }).join('');
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // ==========================================
+    // FUNGSI AI ASSISTANT: PARTNER LAPANGAN INTERAKTIF (UPDATED DB-FIRST)
+    // ==========================================
+    function sendAiQuery() {
+      const inputEl = document.getElementById('aiUserInput');
+      const q = inputEl.value.trim();
+      if (!q) return;
+
+      let userSessions = allUserChatSessions[currentUsername];
+      let currentSession = userSessions.find(s => s.id === activeSessionId);
+      if (!currentSession) return;
+
+      if (currentSession.title === 'Percakapan Baru') {
+        currentSession.title = q.length > 25 ? q.substring(0, 25) + '...' : q;
+      }
+
+      currentSession.messages.push({ sender: 'user', text: q });
+      saveChatSessions();
+      renderChatHistorySidebar();
+      renderActiveChatMessages();
+      inputEl.value = "";
+
+      // Simulasi AI Engine (Pendekatan Database First & Formal-Santai)
+      setTimeout(() => {
+        let lowerQ = q.toLowerCase();
+        let aiReply = "";
+
+        // 1. Ekstraksi Informasi dari Pertanyaan
+        // Sapaan
+        const greetings = ['halo', 'hai', 'pagi', 'siang', 'sore', 'malam', 'assalamu', 'selamat'];
+        let isGreeting = greetings.some(word => lowerQ === word || lowerQ.startsWith(word + ' '));
+
+        // Unit Identifikasi
+        let unitMatch = null;
+        let regexUnit = /cc\s*-?\s*0*([1-9][0-9]?)\b/i;
+        let matchRegex = q.match(regexUnit);
+        if (matchRegex) {
+          let num = matchRegex[1];
+          unitMatch = num.length >= 2 ? 'CC' + num : 'CC0' + num;
+        }
+
+        // Kategori Kerusakan (Berdasarkan Istilah Indonesia & Inggris)
+        let isHoist = lowerQ.includes('hoist') || lowerQ.includes('wire rope') || lowerQ.includes('lifting') || (lowerQ.includes('angkat') && lowerQ.includes('beban')) || lowerQ.includes('trip') || lowerQ.includes('jatuh');
+        let isSpreader = lowerQ.includes('spreader') || lowerQ.includes('twistlock') || lowerQ.includes('flipper') || lowerQ.includes('unlock') || lowerQ.includes('lock');
+        let isGantry = lowerQ.includes('gantry') || lowerQ.includes('travel') || lowerQ.includes('roda') || lowerQ.includes('rel');
+        let isTrolley = lowerQ.includes('trolley') || lowerQ.includes('maju') || lowerQ.includes('mundur') || lowerQ.includes('kabel');
+
+        let searchKeywords = [];
+        if (isHoist) searchKeywords.push('hoist', 'trip', 'angkat', 'beban');
+        if (isSpreader) searchKeywords.push('spreader', 'twistlock', 'flipper');
+        if (isGantry) searchKeywords.push('gantry', 'travel', 'rel');
+        if (isTrolley) searchKeywords.push('trolley');
+
+        // Pencarian Tanggal
+        const bulanList = ['januari', 'februari', 'maret', 'april', 'mei', 'juni', 'juli', 'agustus', 'september', 'oktober', 'november', 'desember'];
+        let containsMonth = bulanList.some(b => lowerQ.includes(b));
+        let isDateQuery = lowerQ.includes('tanggal') || lowerQ.includes('tgl') || containsMonth;
+        let targetDateStr = null;
+        let displayDateStr = "";
+
+        if (isDateQuery) {
+          let dateMatch = lowerQ.match(/\b([1-9]|[12][0-9]|3[01])\b/);
+          let mIndex = bulanList.findIndex(b => lowerQ.includes(b));
+          let y = "2026";
+
+          if (dateMatch && mIndex !== -1) {
+            let d = dateMatch[1].padStart(2, '0');
+            let m = String(mIndex + 1).padStart(2, '0');
+            targetDateStr = `${y}-${m}-${d}`;
+            displayDateStr = `${dateMatch[1]} ${bulanList[mIndex]} ${y}`;
+          } else if (dateMatch) {
+            targetDateStr = `-${dateMatch[1].padStart(2, '0')}`;
+            displayDateStr = `tanggal ${dateMatch[1]}`;
+          }
+        }
+
+        // ========================================================
+        // 2. LOGIKA PENGAMBILAN KEPUTUSAN RESPON AI
+        // ========================================================
+
+        if (isGreeting && lowerQ.length <= 20 && !isHoist && !isSpreader && !isGantry && !isDateQuery) {
+          aiReply = `Halo juga, Rekan Teknisi <b>${currentUsername}</b>! 👋 Saya AI Assistant untuk pemeliharaan Crane. Ada temuan kendala (*trouble*) apa di lapangan hari ini? Silakan ceritakan detailnya, dan saya akan bantu cek referensinya di database kita.`;
+
+        } else if (isDateQuery && targetDateStr) {
+          // Logika jika murni mencari tanggal
+          let foundTroubles = [];
+          for (let k in uploadedDataStore) {
+            let item = uploadedDataStore[k];
+            if (item.workOrders) {
+              item.workOrders.forEach(w => {
+                let matchDate = targetDateStr.startsWith('-') ? w.tanggal.endsWith(targetDateStr) : (w.tanggal === targetDateStr);
+                let matchUnitFilter = unitMatch ? (w.asset === unitMatch) : true;
+                if (matchDate && matchUnitFilter) {
+                  foundTroubles.push(`• <b>Unit ${w.asset}</b> (${w.tanggal}): ${w.desc} <br><span class="text-[11px] text-slate-500">[Work Type: ${w.type} | Durasi: ${w.durasiStr} | WO: ${w.woNum}]</span>`);
+                }
+              });
+            }
+          }
+          let filterText = unitMatch ? ` pada unit <b>${unitMatch}</b>` : '';
+
+          if (foundTroubles.length > 0) {
+            aiReply = `Baik, saya sudah memindai database arsip untuk <b>${displayDateStr}</b>${filterText}. Berikut adalah temuan catatan *breakdown* atau perbaikan yang tercatat di sistem:<br><br>${foundTroubles.join('<br><br>')}`;
+          } else {
+            aiReply = `Berdasarkan pengecekan di database arsip, <b>tidak ditemukan catatan trouble/breakdown</b> untuk <b>${displayDateStr}</b>${filterText}. Kondisi operasional pada waktu tersebut tercatat aman.`;
+          }
+
+        } else {
+          // Logika Analisis Teknis (Mengutamakan Pengecekan Database Terlebih Dahulu)
+
+          // A. Pemindaian Database untuk Referensi Masalah Serupa
+          let dbMatches = [];
+          for (let k in uploadedDataStore) {
+            let item = uploadedDataStore[k];
+            if (item.workOrders) {
+              item.workOrders.forEach(w => {
+                let descLower = w.desc.toLowerCase() + " " + w.task.toLowerCase();
+                let isTopicMatch = searchKeywords.some(kw => descLower.includes(kw));
+                let matchUnit = unitMatch ? (w.asset === unitMatch) : true;
+
+                // Cari kecocokan topik dan/atau kecocokan unit
+                if ((isTopicMatch && matchUnit) || (matchUnit && unitMatch && descLower.includes(lowerQ.split(' ')[0]))) {
+                  dbMatches.push(`• <b>Unit ${w.asset}</b> (${w.tanggal}): ${w.desc} <i>(Durasi Penanganan: ${w.durasiStr})</i>`);
+                }
+              });
+            }
+          }
+
+          // B. Penyusunan Langkah Troubleshooting Ekspansif
+          let techAnalysis = "";
+          if (isHoist) {
+            techAnalysis = `Terkait masalah <b>Power Trip saat Mengangkat Beban Berat (Hoist System)</b>, hal ini sangat krusial dan umumnya dipicu oleh sistem proteksi Inverter/Drive yang mendeteksi lonjakan arus tak wajar (Overcurrent) atau *mechanical jamming*.
+            <br><br><b>💡 Langkah Troubleshooting Komprehensif:</b>
+            <br>1. <b>Cek Log Indikator HMI & Drive:</b> Segera periksa panel *drive* di E-House. Catat kode *fault* yang muncul (misalnya indikasi *Overload*, *Overcurrent*, atau *Brake fault*). Jangan langsung menekan *reset* sebelum tahu kode errornya.
+            <br>2. <b>Inspeksi Kontaktor & Sistem Pengereman (Brake):</b> Pastikan *contactor brake* bekerja sempurna. Jika kampas rem lengket, belum aus sempurna, atau tidak membuka penuh saat motor berputar, arus motor akan melonjak drastis melawan rem, menyebabkan *power trip* seketika.
+            <br>3. <b>Pengecekan Sensor Load Cell:</b> Verifikasi pembacaan beban di HMI. Terkadang pembacaan yang tidak terkalibrasi (*error sensor*) bisa memicu proteksi *overload* dari PLC meskipun beban aktual kontainer masih di batas toleransi (misal 30 Ton terbaca 50 Ton).
+            <br>4. <b>Monitoring Tegangan Suplai (*Voltage Drop*):</b> Cek apakah ada indikasi penurunan suplai daya dari Trafo utama (*voltage drop*) saat *starting current* terjadi di beban puncak.
+            <br>5. <b>Pengecekan Motor Pendingin (*Blower*):</b> Pastikan motor hoist tidak dalam kondisi *overheating*. Jika *blower* mati, sensor *thermistor* pada motor akan memutus sirkuit proteksi daya secara otomatis.`;
+          } else if (isSpreader) {
+            techAnalysis = `Terkait masalah pada <b>Spreader System</b> (khususnya Twistlock/Flipper), ini sering berakar pada kegagalan komunikasi sensor atau adanya *mechanical fatigue*.
+            <br><br><b>💡 Langkah Troubleshooting Komprehensif:</b>
+            <br>1. <b>Isolasi Visual & Mekanis:</b> Periksa secara fisik ke area spreader. Pastikan pin twistlock tidak macet (*jammed*) akibat adanya *grease* yang mengering, kotoran debu parah, atau deformasi mekanis akibat benturan (*impact*).
+            <br>2. <b>Verifikasi Sensor Jarak (*Proximity*):</b> Cek semua *proximity sensor* pada indikator *Landed* dan putaran Twistlock. Seringkali sensor tergeser posisinya beberapa milimeter sehingga sinyal tidak masuk ke modul PLC.
+            <br>3. <b>Pengecekan Konektivitas Kabel (Spreader Cable):</b> Periksa area terminasi kabel utama yang fleksibel. Gerakan naik turun yang konstan sering memicu kabel putus di dalam (*loose contact*). Gunakan multitester untuk mengecek kontinuitas.
+            <br>4. <b>Tes Manual Valve Hidrolik (Jika Tipe Hidrolik):</b> Lakukan pemompaan atau *override* manual pada blok valve solenoid hidrolik untuk melihat apakah pin bisa berputar lancar tanpa beban elektrik.`;
+          } else if (isGantry) {
+            techAnalysis = `Terkait masalah pergerakan <b>Gantry System (Roda/Travel)</b>, isu utamanya berpusat pada sinkronisasi kecepatan roda dan fitur pengamanan lintasan.
+            <br><br><b>💡 Langkah Troubleshooting Komprehensif:</b>
+            <br>1. <b>Inspeksi Lintasan Rel:</b> Pastikan tidak ada rintangan (*obstacle*) di rel dermaga. Sensor *anti-collision* atau *limit switch* bumper akan memutus daya secara instan jika mendeteksi benda asing.
+            <br>2. <b>Pengecekan Parameter Sinkronisasi (Skew):</b> Periksa panel Inverter Motor Gantry sisi Kanan dan Kiri (*Waterside vs Landside*). Pastikan tidak ada ketimpangan beban yang menyebabkan *crane berjalan miring* (*skew*), yang akan menghentikan sistem.
+            <br>3. <b>Inspeksi *Storm Anchor* / Pin Pengunci:</b> Pastikan pin pengunci badai sudah benar-benar terangkat sempurna secara hidrolik/mekanis dan limit switchnya mendeteksi posisi *release*.
+            <br>4. <b>Pemeriksaan Rem Roda:</b> Cek *motor brake* pada setiap *bogey* roda, pastikan merilis bersamaan saat *command joystick* diberikan.`;
+          } else {
+            techAnalysis = `Pertanyaan Anda: <i>"${q}"</i> merupakan kasus yang butuh analisis lebih dalam di lapangan. Mengacu pada panduan keandalan standar PT TPS, kita perlu melokalisir sumber masalahnya.
+            <br><br><b>💡 Pendekatan Investigasi Standar:</b>
+            <br>1. <b>Evaluasi Indikasi Awal:</b> Jalankan crane secara manual (*inching mode*) tanpa beban. Amati pada gerakan apa indikator *fault/trip* muncul pertama kali.
+            <br>2. <b>Cek Diagnostik PLC:</b> Buka layar diagnostik di HMI E-House, periksa *log alarm* terakhir yang menyala (misal: *communication error, thermal trip, safety relay open*).
+            <br>3. <b>Pengecekan Fisik Elektrikal:</b> Lakukan pengecekan *loose contact* pada terminal utama kontaktor, karena getaran ekstrim crane sering mengendurkan baut pengunci sirkuit arus tinggi.`;
+          }
+
+          // C. Menggabungkan Respon (Database + Solusi Teknis)
+          if (dbMatches.length > 0) {
+            aiReply = `Baik, mari kita analisa kendala ini secara sistematis.\n\n📊 **Pengecekan Arsip Database:**\nBerdasarkan data operasional kita, masalah terkait telah tercatat sebelumnya pada sistem. Berikut referensi kejadian sebelumnya:\n${dbMatches.slice(0, 3).join('<br>')}\n\nBerangkat dari riwayat perbaikan di atas dan mengacu pada standar pemeliharaan, berikut adalah tahapan *troubleshooting* yang saya rekomendasikan untuk Anda lakukan saat ini:\n\n${techAnalysis}`;
+          } else {
+            let unitTeks = unitMatch ? ` pada unit **${unitMatch}**` : '';
+            aiReply = `Baik, mari kita analisa kendala ini secara sistematis.\n\nℹ️ **Pengecekan Arsip Database:**\nSaya telah memindai keseluruhan log riwayat perbaikan kita. Saat ini, belum ada catatan *Work Order* di masa lalu yang secara spesifik menangani kendala ini${unitTeks}.\n\nMeskipun tidak ada referensi masa lalu, berdasarkan standar manual teknik (Engineering Best Practice), berikut adalah langkah-langkah *troubleshooting* komprehensif yang wajib Anda lakukan di lapangan:\n\n${techAnalysis}`;
+          }
+        }
+
+        currentSession.messages.push({ sender: 'ai', text: aiReply.replace(/\n/g, '<br>') });
+        saveChatSessions();
+        renderChatHistorySidebar();
+        renderActiveChatMessages();
+      }, 700);
+    }
+
+    window.onload = function () {
+      updateClock();
+      if (currentUserRole) {
+        document.getElementById('loginModal').classList.add('hidden');
+        applyRolePermissions();
+        initUserChatSessions();
+      } else {
+        document.getElementById('loginModal').classList.remove('hidden');
+      }
+      renderUI();
+    };
+  </script>
+</body>
+
+</html>
