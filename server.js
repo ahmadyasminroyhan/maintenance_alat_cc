@@ -109,24 +109,24 @@ app.post('/api/chat', async (req, res) => {
 PERTANYAAN TEKNISI:
 ${prompt.trim()}
 
-DATA WORK ORDER DAN RIWAYAT MAINTENANCE:
+DATA WORK ORDER:
 ${JSON.stringify(
                                         Array.isArray(maintenanceData) ? maintenanceData : []
                                     )}
 
-PETUNJUK ANALISIS:
-1. Periksa data yang diberikan sebelum menjawab.
-2. Jika pertanyaan menyebut tanggal, cocokkan dengan kolom tanggal.
-3. Jika tahun tidak disebutkan, periksa semua tahun yang tersedia.
-4. Identifikasi Work Order yang bertipe Breakdown, BD, atau Corrective
-   sesuai informasi pada data.
-5. Jika ditemukan, sebutkan tanggal, unit crane, nomor WO,
-   deskripsi gangguan, dan status jika tersedia.
-6. Jika tidak ditemukan catatan yang cocok, nyatakan bahwa tidak ada
-   catatan yang cocok dalam data yang diberikan.
-7. Jangan menyimpulkan bahwa breakdown tidak pernah terjadi hanya
-   karena data yang diberikan tidak memuat catatannya.
-8. Jangan mengarang data atau menganggap data DEMO sebagai data aktual.
+INSTRUKSI ANALISIS:
+1. Periksa data Work Order yang diberikan sebelum menjawab.
+2. Jika pengguna menyebut tanggal, cocokkan dengan tanggal pada setiap WO.
+3. Jika tahun tidak disebutkan, periksa seluruh tahun yang tersedia.
+4. Kenali variasi penulisan Breakdown, Break Down, BD, dan istilah terkait.
+5. Jika WO ditemukan, tampilkan tanggal, unit, nomor WO,
+   deskripsi, tipe pekerjaan, dan status jika tersedia.
+6. Jangan menganggap status pekerjaan sebagai jenis pekerjaan.
+7. Jangan menyatakan tidak ada WO sebelum memeriksa seluruh data yang diterima.
+8. Jika data kosong atau tidak lengkap, jelaskan keterbatasannya.
+9. Bedakan "tidak ditemukan dalam data" dengan "kejadian tidak pernah terjadi".
+10. Jangan mengarang nomor WO, tanggal, unit, atau deskripsi.
+11. Jawab berdasarkan data yang benar-benar tersedia.
 `
                                 }
                             ]

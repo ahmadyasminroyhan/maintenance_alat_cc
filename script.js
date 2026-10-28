@@ -1161,55 +1161,68 @@ async function sendAiQuery() {
   let aiReply = "";
 
   try {
+    const maintenanceData = Object.entries(uploadedDataStore).flatMap(
+      ([periode, data]) =>
+        (data.workOrders || []).map(wo => ({
+          periode,
+          tanggal: wo.tanggal || '',
+          woNum: wo.woNum || '',
+          asset: wo.asset || '',
+          type: wo.type || '',
+          desc: wo.desc || '',
+          task: wo.task || '',
+          durasiStr: wo.durasiStr || '',
+          status: wo.status || ''
+        }))
+    );
+
     const response = await fetch('http://localhost:3000/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: rawQ,
-        maintenanceData: Object.entries(uploadedDataStore).flatMap(
-          ([periode, data]) =>
-            (data.workOrders || []).map(wo => ({
-              periode: periode,
-              tanggal: wo.tanggal || '',
-              woNum: wo.woNum || '',
-              asset: wo.asset || '',
-              type: wo.type || '',
-              desc: wo.desc || '',
-              task: wo.task || '',
-              durasiStr: wo.durasiStr || '',
-              status: wo.status || ''
-            }))
-        )
-      })
+      const maintenanceData = Object.entries(uploadedDataStore).flatMap(
+        ([periode, data]) =>
+          (data.workOrders || []).map(wo => ({
+            periode,
+            tanggal: wo.tanggal || '',
+            woNum: wo.woNum || '',
+            asset: wo.asset || '',
+            type: wo.type || '',
+            desc: wo.desc || '',
+            task: wo.task || '',
+            status: wo.status || ''
+          }))
+      );
+
+      const response = await fetch('http://localhost:3000/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: rawQ,
+          maintenanceData
+        })
+      });
     });
 
     const data = await response.json();
 
     if (response.ok && typeof data.answer === 'string' && data.answer.trim()) {
-      // Format respons dari server.js yang terbaru
       aiReply = data.answer;
-
     } else if (
       response.ok &&
       data.candidates?.[0]?.content?.parts?.[0]?.text
     ) {
-      // Mendukung format respons Gemini secara langsung
       aiReply = data.candidates[0].content.parts[0].text;
-
     } else if (data.error) {
-      // Menampilkan pesan error dari backend atau Gemini API
       const errorMessage =
         typeof data.error === 'string'
           ? data.error
           : data.error.message || JSON.stringify(data.error);
 
       aiReply = `⚠️ **Error dari API Gemini:** ${errorMessage}`;
-
     } else {
-      // Menampilkan informasi jika format respons tidak sesuai
       console.error('Respons backend tidak sesuai:', data);
-
-      aiReply = `⚠️ **Peringatan Server:** Backend merespons, tetapi jawaban AI tidak ditemukan. Status HTTP: ${response.status}.`;
+      aiReply =
+        `⚠️ Backend tidak mengembalikan jawaban AI. Status HTTP: ${response.status}.`;
     }
   } catch (err) {
     console.warn("Gagal terhubung ke backend lokal:", err);
