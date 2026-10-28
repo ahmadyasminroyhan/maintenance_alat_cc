@@ -1,29 +1,23 @@
 // ==========================================
-// KODE KESELURUHAN SCRIPT.JS - AI MAINTENANCE CC PT TPS
+// KODE UTUH SCRIPT.JS - AI MAINTENANCE CC PT TPS (RESPONSIF MOBILE & PRESISI)
 // ==========================================
 
 const AUTH_CONFIG = { adminPassword: 'admin123', teknisiPassword: 'teknisi123' };
 const VALID_TPS_UNITS = ['CC01', 'CC02', 'CC03', 'CC04', 'CC06', 'CC08', 'CC09', 'CC10', 'CC14', 'CC15', 'CC16', 'CC21', 'CC22', 'CC23', 'CC24', 'CC25'];
 
-let uploadedDataStore = JSON.parse(localStorage.getItem('tps_uploaded_store_v24') || '{}');
+let uploadedDataStore = JSON.parse(localStorage.getItem('tps_uploaded_store_v26') || '{}');
 let currentUserRole = localStorage.getItem('tps_current_role') || null;
 let currentUsername = localStorage.getItem('tps_current_username') || "Teknisi_TPS";
 
 let allUserChatSessions = JSON.parse(localStorage.getItem('tps_chat_sessions_v3') || '{}');
 let activeSessionId = localStorage.getItem('tps_active_session_id') || null;
 
-// API Key kosong secara default untuk keamanan GitHub (bisa diisi via input UI atau backend)
-let userCustomApiKey = localStorage.getItem('tps_custom_gemini_api_key') || "";
+let archiveCurrentLevel = 'YEAR';
+let archiveSelectedYear = null;
+let archiveSelectedMonth = null;
 
-function saveStore() { localStorage.setItem('tps_uploaded_store_v24', JSON.stringify(uploadedDataStore)); }
+function saveStore() { localStorage.setItem('tps_uploaded_store_v26', JSON.stringify(uploadedDataStore)); }
 function saveChatSessions() { localStorage.setItem('tps_chat_sessions_v3', JSON.stringify(allUserChatSessions)); }
-
-function saveCustomApiKey() {
-  const keyVal = document.getElementById('customApiKeyInput').value.trim();
-  userCustomApiKey = keyVal;
-  localStorage.setItem('tps_custom_gemini_api_key', keyVal);
-  showToast("API Key Gemini berhasil disimpan!");
-}
 
 function updateClock() {
   const now = new Date();
@@ -77,7 +71,7 @@ function applyRolePermissions() {
   if (initialBadge) initialBadge.innerText = currentUsername.substring(0, 2).toUpperCase();
 
   if (currentUserRole === 'admin') {
-    if (roleDescEl) roleDescEl.innerText = "Administrator";
+    if (roleDescEl) roleDescEl.innerText = "Administrator / Ops";
     if (resetBtn) resetBtn.classList.remove('hidden');
   } else {
     if (roleDescEl) roleDescEl.innerText = "Teknisi Lapangan";
@@ -112,6 +106,8 @@ function openUploadModal() { document.getElementById('uploadModal').classList.re
 function closeUploadModal() { document.getElementById('uploadModal').classList.add('hidden'); }
 function openManualModal() { document.getElementById('manualModal').classList.remove('hidden'); }
 function closeManualModal() { document.getElementById('manualModal').classList.add('hidden'); }
+function openProductionModal() { document.getElementById('productionModal').classList.remove('hidden'); }
+function closeProductionModal() { document.getElementById('productionModal').classList.add('hidden'); }
 
 function switchTab(tabId) {
   const dashMenu = document.getElementById('dashboardDropdownMenu');
@@ -132,8 +128,6 @@ function switchTab(tabId) {
 
   if (tabId === 'files') renderFileArchiveTable();
   if (tabId === 'ai') {
-    const keyField = document.getElementById('customApiKeyInput');
-    if (keyField) keyField.value = userCustomApiKey;
     renderChatHistorySidebar();
     renderActiveChatMessages();
   }
@@ -159,7 +153,7 @@ function renderUI() {
     document.getElementById('cardTotalMmbf').innerText = "0";
     document.getElementById('cardTotalDowntime').innerText = "0 Jam";
     document.getElementById('unitTableBody').innerHTML = VALID_TPS_UNITS.map(u => `<tr class="border-b"><td class="p-3 font-bold text-primary">${u}</td><td class="p-3 text-slate-700">Container Crane Unit ${u}</td><td class="p-3 text-slate-400">Belum ada data operasional</td></tr>`).join('');
-    document.getElementById('woTableBody').innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400">- Belum Ada Data Aktual -</td></tr>`;
+    document.getElementById('woTableBody').innerHTML = `<tr><td colspan="9" class="p-6 text-center text-slate-400">- Belum Ada Data Aktual -</td></tr>`;
     renderCharts();
     return;
   }
@@ -172,6 +166,7 @@ function renderUI() {
 
 function showToast(msg) {
   const toast = document.getElementById('toastNotification');
+  if (!toast) return;
   document.getElementById('toastMessage').innerText = msg;
   toast.classList.remove('translate-y-20', 'opacity-0');
   setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
@@ -180,7 +175,9 @@ function showToast(msg) {
 function normalizeUnitAsset(rawAsset) {
   if (!rawAsset) return null;
   let str = String(rawAsset).toUpperCase().trim();
-  for (let u of VALID_TPS_UNITS) { if (str.includes(u) || str.includes(u.replace('CC', 'QC'))) return u; }
+  for (let u of VALID_TPS_UNITS) {
+    if (str.includes(u) || str.includes(u.replace('CC', 'QC')) || str.endsWith(u.replace('CC', ''))) return u;
+  }
   return null;
 }
 
@@ -200,6 +197,31 @@ function parseValidDate(rawDate, defaultYear = '2026') {
   return `${defaultYear}-01-01`;
 }
 
+function dataBulananKosong(year, month, fileName) {
+  const boxesPerCC = {}, timeOpPerCC = {}, bdPerCC = {}, dtPerCC = {};
+  const boxesDailyPerCC = {}, timeOpDailyPerCC = {}, bdDailyPerCC = {};
+
+  VALID_TPS_UNITS.forEach(unit => {
+    boxesPerCC[unit] = 0; timeOpPerCC[unit] = 0; bdPerCC[unit] = 0; dtPerCC[unit] = 0;
+    boxesDailyPerCC[unit] = new Array(31).fill(0);
+    timeOpDailyPerCC[unit] = new Array(31).fill(0);
+    bdDailyPerCC[unit] = new Array(31).fill(0);
+  });
+
+  return {
+    fileName,
+    year: String(year),
+    month,
+    units: [...VALID_TPS_UNITS],
+    totalCC: VALID_TPS_UNITS.length,
+    boxes: 0, bd: 0, mmbf: 0, downtime: 0,
+    workOrders: [],
+    cancelledWorkOrders: [],
+    boxesPerCC, timeOpPerCC, bdPerCC, dtPerCC,
+    boxesDailyPerCC, timeOpDailyPerCC, bdDailyPerCC
+  };
+}
+
 function submitManualForm(e) {
   e.preventDefault();
   const date = document.getElementById('manDate').value;
@@ -215,175 +237,326 @@ function submitManualForm(e) {
   const subsystem = document.getElementById('manSubsystem').value;
   const desc = document.getElementById('manDesc').value;
   const downtime = parseFloat(document.getElementById('manDowntime').value) || 0;
-  const boxes = parseFloat(document.getElementById('manBoxes').value) || 0;
 
   let key = `${year}-${monthName}`;
   if (!uploadedDataStore[key]) {
-    uploadedDataStore[key] = {
-      fileName: `Manual Input (${monthName} ${year})`, month: monthName, year: year, units: [crane],
-      totalCC: 1, boxes: 0, bd: 0, mmbf: 0, downtime: 0, workOrders: [],
-      boxesPerCC: {}, timeOpPerCC: {}, bdPerCC: {}, dtPerCC: {},
-      boxesDailyPerCC: {}, timeOpDailyPerCC: {}, bdDailyPerCC: {}
-    };
-    VALID_TPS_UNITS.forEach(u => {
-      uploadedDataStore[key].boxesPerCC[u] = 0; uploadedDataStore[key].timeOpPerCC[u] = 0; uploadedDataStore[key].bdPerCC[u] = 0; uploadedDataStore[key].dtPerCC[u] = 0;
-      uploadedDataStore[key].boxesDailyPerCC[u] = new Array(31).fill(0); uploadedDataStore[key].timeOpDailyPerCC[u] = new Array(31).fill(0); uploadedDataStore[key].bdDailyPerCC[u] = new Array(31).fill(0);
-    });
+    uploadedDataStore[key] = dataBulananKosong(year, monthName, `Database (${monthName} ${year})`);
   }
 
   let ds = uploadedDataStore[key];
-  ds.boxes += boxes; ds.bd += 1; ds.downtime += downtime;
-  ds.mmbf = Math.round(ds.boxes / (ds.bd || 1));
+  ds.bd += 1;
+  ds.downtime += downtime;
   if (!ds.units.includes(crane)) ds.units.push(crane);
 
-  ds.boxesPerCC[crane] += boxes; ds.bdPerCC[crane] += 1; ds.dtPerCC[crane] += downtime;
-  ds.boxesDailyPerCC[crane][dayIdx] += boxes; ds.bdDailyPerCC[crane][dayIdx] += 1;
+  ds.bdPerCC[crane] += 1;
+  ds.dtPerCC[crane] += downtime;
+  if (!ds.bdDailyPerCC[crane]) ds.bdDailyPerCC[crane] = new Array(31).fill(0);
+  ds.bdDailyPerCC[crane][dayIdx] = (ds.bdDailyPerCC[crane][dayIdx] || 0) + 1;
 
   ds.workOrders.push({
-    tanggal: parseValidDate(date, year), woNum: customWoNum, desc: desc,
-    type: "Breakdown", asset: crane, durasiStr: downtime + " Jam", durasiNum: downtime, task: subsystem
+    tanggal: parseValidDate(date, year),
+    woNum: customWoNum,
+    desc: desc,
+    type: "Breakdown",
+    asset: crane,
+    durasiStr: downtime.toFixed(1) + " Jam",
+    durasiNum: downtime,
+    task: subsystem,
+    status: 'COMPLETED',
+    dateSource: 'Manual Teknisi'
   });
 
   saveStore(); closeManualModal(); renderUI();
-  showToast('Data manual berhasil disimpan ke database global!');
+  showToast('Data WO Maintenance berhasil disimpan!');
+}
+
+function submitProductionForm(e) {
+  e.preventDefault();
+  const date = document.getElementById('prodDate').value;
+  const year = date.split('-')[0] || "2026";
+  const monthNum = date.split('-')[1] || "01";
+  const dayStr = date.split('-')[2] || "01";
+  const dayIdx = parseInt(dayStr, 10) - 1;
+  const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const monthName = months[parseInt(monthNum, 10) - 1] || "Januari";
+
+  const crane = document.getElementById('prodCrane').value;
+  const boxes = parseFloat(document.getElementById('prodBoxes').value) || 0;
+
+  let key = `${year}-${monthName}`;
+  if (!uploadedDataStore[key]) {
+    uploadedDataStore[key] = dataBulananKosong(year, monthName, `Database (${monthName} ${year})`);
+  }
+
+  let ds = uploadedDataStore[key];
+  ds.boxes += boxes;
+  ds.boxesPerCC[crane] = (ds.boxesPerCC[crane] || 0) + boxes;
+  if (!ds.boxesDailyPerCC[crane]) ds.boxesDailyPerCC[crane] = new Array(31).fill(0);
+  ds.boxesDailyPerCC[crane][dayIdx] = (ds.boxesDailyPerCC[crane][dayIdx] || 0) + boxes;
+
+  saveStore(); closeProductionModal(); renderUI();
+  showToast('Data Produksi Box berhasil disimpan!');
+}
+
+function isWorkOrderCancelled(row, normalisasiFn) {
+  const keys = Object.keys(row || {});
+  const statusKey = keys.find(k => /status/i.test(normalisasiFn(k)));
+  const statusVal = statusKey ? String(row[statusKey] || '').toUpperCase() : '';
+
+  const descKey = keys.find(k => /description|short text|problem/i.test(normalisasiFn(k)));
+  const descVal = descKey ? String(row[descKey] || '').toUpperCase() : '';
+
+  const combined = `${statusVal} ${descVal}`;
+  return /\bCANCEL(?:LED|ED)?\b|\bDIBATALKAN\b|\bCANCELED\b/.test(combined);
 }
 
 function processUploadedFile() {
   const fileInput = document.getElementById('actualFileInput');
-  const yearSel = document.getElementById('uploadYear').value;
-  const monthSel = document.getElementById('uploadMonth').value;
+  const yearSel = document.getElementById('uploadYear')?.value || String(new Date().getFullYear());
+  const monthSel = document.getElementById('uploadMonth')?.value || 'Januari';
 
-  if (fileInput.files.length === 0) return alert('Pilih berkas Excel terlebih dahulu!');
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    alert('Pilih berkas Excel terlebih dahulu!');
+    return;
+  }
 
   const file = fileInput.files[0];
   const reader = new FileReader();
+  const MONTHS_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
-  reader.onload = function (e) {
+  function normalisasiNamaKolom(v) {
+    return String(v ?? '').toLowerCase().trim().replace(/[\r\n]+/g, ' ').replace(/[._/-]+/g, ' ').replace(/\s+/g, ' ');
+  }
+
+  function ambilKolom(row, kandidat) {
+    const keys = Object.keys(row || {});
+    const normalizedKeys = keys.map(k => ({ asli: k, normal: normalisasiNamaKolom(k) }));
+    for (const nama of kandidat) {
+      const target = normalisasiNamaKolom(nama);
+      const found = normalizedKeys.find(k => k.normal === target || k.normal.includes(target));
+      if (found && row[found.asli] !== undefined && row[found.asli] !== null) {
+        const value = row[found.asli];
+        if (String(value).trim() !== '') return value;
+      }
+    }
+    return null;
+  }
+
+  function angkaAman(value) {
+    if (value === null || value === undefined || value === '') return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const text = String(value).trim();
+    if (!text || text.startsWith('#')) return 0;
+    const cleaned = text.replace(/\s/g, '').replace(/jam/ig, '');
+    if (/^-?\d{1,3}(\.\d{3})+,\d+$/.test(cleaned)) return Number(cleaned.replace(/\./g, '').replace(',', '.')) || 0;
+    if (/^-?\d+,\d+$/.test(cleaned)) return Number(cleaned.replace(',', '.')) || 0;
+    return Number(cleaned) || 0;
+  }
+
+  function tanggalISO(value) {
+    if (!value) return null;
+    if (typeof value === 'number' && value > 20000 && value < 100000) {
+      const date = XLSX.SSF.parse_date_code(value);
+      if (date && date.y && date.m && date.d) {
+        return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
+      }
+    }
+    if (value instanceof Date && !isNaN(value)) {
+      let y = value.getFullYear();
+      let m = String(value.getMonth() + 1).padStart(2, '0');
+      let d = String(value.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    const raw = String(value).trim();
+    let match = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+    if (match) return `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
+    match = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+    if (match) return `${match[3]}-${String(match[2]).padStart(2, '0')}-${String(match[1]).padStart(2, '0')}`;
+    return null;
+  }
+
+  reader.onload = function (event) {
     try {
-      const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const workbook = XLSX.read(new Uint8Array(event.target.result), { type: 'array', cellDates: true });
+      const targetKey = `${yearSel}-${monthSel}`;
+      const dataBulan = dataBulananKosong(yearSel, monthSel, file.name);
+      const woDilihat = new Set();
 
-      let boxesPerCC = {}; let timeOpPerCC = {}; let bdPerCC = {}; let dtPerCC = {};
-      let boxesDailyPerCC = {}; let timeOpDailyPerCC = {}; let bdDailyPerCC = {};
+      workbook.SheetNames.forEach(sheetName => {
+        const cleanSheet = sheetName.trim().toLowerCase();
 
-      VALID_TPS_UNITS.forEach(u => {
-        boxesPerCC[u] = 0; timeOpPerCC[u] = 0; bdPerCC[u] = 0; dtPerCC[u] = 0;
-        boxesDailyPerCC[u] = new Array(31).fill(0); timeOpDailyPerCC[u] = new Array(31).fill(0); bdDailyPerCC[u] = new Array(31).fill(0);
-      });
+        // 1. PARSER SHEET LIST OF WORK ORDERS
+        if (cleanSheet.includes('work order') || cleanSheet.includes('list of wo')) {
+          const sheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
 
-      let maxDays = 31;
-      if (['April', 'Juni', 'September', 'November'].includes(monthSel)) maxDays = 30;
-      else if (monthSel === 'Februari') maxDays = (parseInt(yearSel) % 4 === 0) ? 29 : 28;
+          rows.forEach(row => {
+            const woRaw = ambilKolom(row, ['Work Order', 'Order', 'WO', 'No WO', 'WO Number', 'Tiket', 'No']);
+            const rawAsset = String(ambilKolom(row, ['Asset', 'Equipment', 'Unit', 'UNIT', 'Crane', 'No Crane']) || '');
+            const asset = normalizeUnitAsset(rawAsset);
 
-      let summarySheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('summary') || n.toLowerCase().includes('performance'));
+            if (!woRaw || !asset) return;
 
-      if (summarySheetName) {
-        let sumJson = XLSX.utils.sheet_to_json(workbook.Sheets[summarySheetName], { header: 1 });
-        let currentSection = '';
+            const woNum = String(woRaw).trim();
+            const description = String(ambilKolom(row, ['Description', 'Short Text', 'Problem', 'ACTION TAKEN', 'Keterangan']) || '-').trim();
+            const workType = String(ambilKolom(row, ['Work Type', 'Type', 'Tipe']) || 'Breakdown').trim();
 
-        for (let r = 0; r < sumJson.length; r++) {
-          let row = sumJson[r];
-          if (!row || !row[0]) continue;
-          let col0 = String(row[0]).trim().toUpperCase();
+            const actualStart = ambilKolom(row, ['DATE Start', 'Date Start', 'Actual Start', 'Doc. date', 'Tanggal']);
+            let parsedDate = tanggalISO(actualStart);
+            let dayNum = 1;
 
-          if (col0.includes('BOXES / PRODUKSI') || col0 === 'BOXES') { currentSection = 'BOXES'; continue; }
-          if (col0.includes('TIME OPERATION')) { currentSection = 'TIME'; continue; }
-          if (col0.includes('NUMBER OF BREAKDOWN') || col0 === 'BREAKDOWN') { currentSection = 'BREAKDOWN'; continue; }
+            if (parsedDate) {
+              dayNum = parseInt(parsedDate.slice(8, 10), 10) || 1;
+            }
 
-          if (['BOXES', 'TIME', 'BREAKDOWN'].includes(currentSection)) {
-            let unitMatch = normalizeUnitAsset(col0);
-            if (unitMatch && col0.length <= 6) {
-              for (let c = 1; c <= maxDays; c++) {
-                let val = parseFloat(row[c]);
-                if (!isNaN(val)) {
-                  if (currentSection === 'BOXES') { boxesPerCC[unitMatch] += val; boxesDailyPerCC[unitMatch][c - 1] += val; }
-                  else if (currentSection === 'TIME') { timeOpPerCC[unitMatch] += val; timeOpDailyPerCC[unitMatch][c - 1] += val; }
-                  else if (currentSection === 'BREAKDOWN') { bdPerCC[unitMatch] += val; bdDailyPerCC[unitMatch][c - 1] += val; }
+            let monthIdxModal = MONTHS_ID.indexOf(monthSel) + 1;
+            let monthStrModal = String(monthIdxModal > 0 ? monthIdxModal : 1).padStart(2, '0');
+            parsedDate = `${yearSel}-${monthStrModal}-${String(dayNum).padStart(2, '0')}`;
+
+            const dayIdx = Math.max(0, Math.min(30, dayNum - 1));
+            const woObject = {
+              tanggal: parsedDate,
+              woNum,
+              desc: description,
+              type: workType,
+              asset,
+              durasiNum: Math.max(0, angkaAman(ambilKolom(row, ['DURATION', 'Duration ( Hrs )', 'Duration', 'Downtime', 'Durasi']))),
+              durasiStr: `${angkaAman(ambilKolom(row, ['DURATION', 'Duration ( Hrs )', 'Duration', 'Downtime', 'Durasi'])).toFixed(1)} Jam`,
+              task: String(ambilKolom(row, ['TASK', 'Subsystem', 'SYSTEM', 'Sistem']) || 'OTHER SYSTEM'),
+              status: String(ambilKolom(row, ['STATUS', 'Status']) || 'OPEN'),
+              dateSource: actualStart ? 'Actual Start' : 'Default Modal'
+            };
+
+            if (isWorkOrderCancelled(row, normalisasiNamaKolom)) {
+              dataBulan.cancelledWorkOrders.push(woObject);
+              return;
+            }
+
+            const signature = `${woNum}|${asset}|${parsedDate}`.toUpperCase();
+            if (woDilihat.has(signature)) return;
+            woDilihat.add(signature);
+
+            dataBulan.workOrders.push(woObject);
+            dataBulan.downtime += woObject.durasiNum;
+            dataBulan.dtPerCC[asset] = (dataBulan.dtPerCC[asset] || 0) + woObject.durasiNum;
+
+            if (/breakdown|bd\b|corrective/i.test(workType)) {
+              dataBulan.bd++;
+              dataBulan.bdPerCC[asset] = (dataBulan.bdPerCC[asset] || 0) + 1;
+              if (!dataBulan.bdDailyPerCC[asset]) dataBulan.bdDailyPerCC[asset] = new Array(31).fill(0);
+              dataBulan.bdDailyPerCC[asset][dayIdx] = (dataBulan.bdDailyPerCC[asset][dayIdx] || 0) + 1;
+            }
+          });
+        }
+
+        // 2. PARSER PRODUKSI (TERISOLASI)
+        if (cleanSheet.includes('summary daily performance') || cleanSheet.includes('produksi')) {
+          const sheet = workbook.Sheets[sheetName];
+          const rawGrid = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+          let boxesHeaderIdx = -1;
+          for (let r = 0; r < rawGrid.length; r++) {
+            const rowStr = String(rawGrid[r] || '').toLowerCase();
+            if (rowStr.includes('boxes') || rowStr.includes('produksi')) {
+              boxesHeaderIdx = r;
+              break;
+            }
+          }
+
+          if (boxesHeaderIdx !== -1) {
+            for (let r = boxesHeaderIdx + 1; r < Math.min(rawGrid.length, boxesHeaderIdx + 20); r++) {
+              const row = rawGrid[r];
+              if (!row || !row[0]) continue;
+
+              const rowLabel = String(row[0]).trim().toUpperCase();
+              if (rowLabel.includes('TOTAL') || rowLabel.includes('TOT')) break;
+
+              const unit = normalizeUnitAsset(row[0]);
+              if (unit) {
+                let totalBoxUnit = 0;
+                let maxDaysInRow = Math.min(30, row.length - 2);
+
+                for (let day = 1; day <= maxDaysInRow; day++) {
+                  let val = angkaAman(row[day]);
+                  if (val > 0) {
+                    totalBoxUnit += val;
+                    dataBulan.boxesDailyPerCC[unit][day - 1] = (dataBulan.boxesDailyPerCC[unit][day - 1] || 0) + val;
+                  }
                 }
+
+                if (totalBoxUnit === 0 && row[31] !== undefined && row[31] !== null && angkaAman(row[31]) > 0) {
+                  totalBoxUnit = angkaAman(row[31]);
+                }
+
+                dataBulan.boxesPerCC[unit] = totalBoxUnit;
+                dataBulan.boxes += totalBoxUnit;
               }
             }
           }
         }
+      });
+
+      if (dataBulan.workOrders.length === 0 && dataBulan.boxes === 0) {
+        alert('Gagal! Tidak ada data valid yang dapat dibaca dari file ini.');
+        return;
       }
 
-      let totalBoxes = Object.values(boxesPerCC).reduce((a, b) => a + b, 0);
-      let breakdownCount = Object.values(bdPerCC).reduce((a, b) => a + b, 0);
-      let totalDowntime = 0;
-      let parsedWorkOrders = [];
+      dataBulan.mmbf = dataBulan.bd > 0 ? Math.round(dataBulan.boxes / dataBulan.bd) : dataBulan.boxes;
+      uploadedDataStore[targetKey] = dataBulan;
 
-      let woSheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('work order') || n.toLowerCase().includes('wo') || n.toLowerCase().includes('list of work orders'));
-      if (woSheetName) {
-        let woRawJson = XLSX.utils.sheet_to_json(workbook.Sheets[woSheetName]);
-        woRawJson.forEach(row => {
-          let woNum = row['Work Order'] || row['Order'] || row['WO'] || row['No WO'];
-          if (woNum) {
-            let desc = String(row['Description'] || row['Short Text'] || row['Problem'] || '-');
-            let rawAsset = String(row['Asset'] || row['Equipment'] || row['Asset2'] || row['Unit'] || '');
-            let normalizedAsset = normalizeUnitAsset(rawAsset);
-            if (!normalizedAsset) return;
+      saveStore();
+      closeUploadModal();
 
-            let durasi = row['DURATION'] || row['Duration'] || row['Durasi'] || 0;
-            let durasiNum = typeof durasi === 'number' ? durasi * 24 : parseFloat(durasi) || 0;
-            totalDowntime += durasiNum; dtPerCC[normalizedAsset] += durasiNum;
+      document.getElementById('filterYear').value = yearSel;
+      document.getElementById('filterMonth').value = monthSel;
 
-            let durasiStr = typeof durasi === 'number' ? `${durasiNum.toFixed(1)} Jam` : String(durasi);
-            let rawDate = row['Doc. date'] || row['DOC DATE/ SCH DATE'] || row['Date'] || `${yearSel}-01-01`;
-
-            let sysText = (String(row['Problem Code'] || '') + " " + String(row['TASK'] || '') + " " + desc).toUpperCase();
-            let taskStr = 'OTHER SYSTEM';
-            if (sysText.includes('SPD') || sysText.includes('SPRE') || sysText.includes('FLIP')) taskStr = 'SPREADER SYSTEM';
-            else if (sysText.includes('TRL') || sysText.includes('TROL')) taskStr = 'TROLLEY SYSTEM';
-            else if (sysText.includes('GTR') || sysText.includes('GANT') || sysText.includes('TRAVEL')) taskStr = 'GANTRY SYSTEM';
-            else if (sysText.includes('TLS') || sysText.includes('TRIM') || sysText.includes('SKEW') || sysText.includes('LIST')) taskStr = 'TRIM LIST SKEW SYSTEM';
-            else if (sysText.includes('HST') || sysText.includes('HOIS')) taskStr = 'HOIST SYSTEM';
-            else if (sysText.includes('ELC') || sysText.includes('ELEV') || sysText.includes('CAB') || sysText.includes('LIGHT') || sysText.includes('POWER')) taskStr = 'ELECTRIC CONTROL SYSTEM';
-
-            parsedWorkOrders.push({
-              tanggal: parseValidDate(rawDate, yearSel), woNum: String(woNum), desc: desc, type: String(row['Work Type'] || 'Breakdown'),
-              asset: normalizedAsset, durasiStr: durasiStr, durasiNum: durasiNum, task: taskStr
-            });
-          }
-        });
-      }
-
-      let mmbfVal = breakdownCount > 0 ? Math.round(totalBoxes / breakdownCount) : totalBoxes;
-
-      uploadedDataStore[`${yearSel}-${monthSel}`] = {
-        fileName: file.name, month: monthSel, year: yearSel, units: VALID_TPS_UNITS,
-        totalCC: VALID_TPS_UNITS.length, boxes: totalBoxes, bd: breakdownCount, mmbf: mmbfVal, downtime: totalDowntime, workOrders: parsedWorkOrders,
-        boxesPerCC: boxesPerCC, timeOpPerCC: timeOpPerCC, bdPerCC: bdPerCC, dtPerCC: dtPerCC,
-        boxesDailyPerCC: boxesDailyPerCC, timeOpDailyPerCC: timeOpDailyPerCC, bdDailyPerCC: bdDailyPerCC
-      };
-
-      saveStore(); closeUploadModal(); renderUI();
-      showToast(`Parser Sukses: Ditemukan ${totalBoxes.toLocaleString('id-ID')} Boxes di ${monthSel} ${yearSel}.`);
+      renderUI();
+      renderFileArchiveTable();
+      showToast(`Data ${monthSel} ${yearSel} berhasil dimuat! Produksi: ${dataBulan.boxes.toLocaleString('id-ID')} Box | BD: ${dataBulan.bd}`);
     } catch (err) {
-      console.error(err); alert("Gagal memparsing file Excel.");
+      console.error(err);
+      alert('Gagal memproses file Excel: ' + err.message);
     }
   };
   reader.readAsArrayBuffer(file);
 }
 
-function verifyAdminAction(callback) {
-  if (currentUserRole !== 'admin') return alert('Akses Ditolak! Fitur ini khusus Administrator.');
-  let pin = prompt('Masukkan password administrator:');
-  if (pin === AUTH_CONFIG.adminPassword) callback();
-  else if (pin !== null) alert('Password salah!');
-}
-
 function resetData() {
-  verifyAdminAction(() => {
-    if (confirm('Reset seluruh database arsip?')) {
-      uploadedDataStore = {}; saveStore(); renderUI(); showToast('Database berhasil di-reset.');
-    }
-  });
+  if (confirm('APAKAH ANDA YAKIN?\nSeluruh data arsip operasional dan grafik akan dihapus secara permanen.')) {
+    localStorage.removeItem('tps_uploaded_store_v26');
+    uploadedDataStore = {};
+    renderUI();
+    renderFileArchiveTable();
+    showToast('Database berhasil di-reset!');
+    setTimeout(() => location.reload(), 800);
+  }
 }
 
-function deleteFileRecord(k) {
-  verifyAdminAction(() => {
-    if (confirm('Hapus arsip ini?')) {
-      delete uploadedDataStore[k]; saveStore(); renderFileArchiveTable(); renderUI(); showToast('Arsip berhasil dihapus.');
+// OPSI HAPUS SINGLE WORK ORDER HARIAN
+function deleteSingleWorkOrder(tahun, bulan, woNum, asset) {
+  let key = `${tahun}-${bulan}`;
+  let dataM = uploadedDataStore[key];
+  if (!dataM || !dataM.workOrders) return;
+
+  if (confirm(`Hapus Work Order [${woNum}] untuk Unit ${asset}?`)) {
+    const targetIdx = dataM.workOrders.findIndex(w => w.woNum === woNum && w.asset === asset);
+    if (targetIdx !== -1) {
+      const removedWo = dataM.workOrders.splice(targetIdx, 1)[0];
+
+      if (/breakdown|bd\b|corrective/i.test(removedWo.type)) {
+        dataM.bd = Math.max(0, dataM.bd - 1);
+        dataM.bdPerCC[asset] = Math.max(0, (dataM.bdPerCC[asset] || 1) - 1);
+      }
+      dataM.downtime = Math.max(0, dataM.downtime - (removedWo.durasiNum || 0));
+      dataM.dtPerCC[asset] = Math.max(0, (dataM.dtPerCC[asset] || 0) - (removedWo.durasiNum || 0));
+      dataM.mmbf = dataM.bd > 0 ? Math.round(dataM.boxes / dataM.bd) : dataM.boxes;
+
+      saveStore();
+      renderUI();
+      renderFileArchiveTable();
+      showToast(`Work Order ${woNum} berhasil dihapus.`);
     }
-  });
+  }
 }
 
 function applyGlobalFilter() {
@@ -395,22 +568,33 @@ function applyGlobalFilter() {
   if (!hasAnyData()) { renderCharts(); return; }
 
   let tBox = 0, tBd = 0, tDt = 0;
-  let activeWO = []; let indText = "";
+  let activeWO = [];
+  let indText = "";
   let activeUnitSet = new Set();
 
   for (let k in uploadedDataStore) {
     let d = uploadedDataStore[k];
-    if (d.year === sYear) {
-      if (sMonth === 'ALL' || d.month === sMonth) {
-        for (let u of VALID_TPS_UNITS) {
-          if ((d.boxesPerCC && d.boxesPerCC[u] > 0) || (d.bdPerCC && d.bdPerCC[u] > 0)) activeUnitSet.add(u);
+    const matchYear = (sYear === 'ALL' || d.year === String(sYear));
+    const matchMonth = (sMonth === 'ALL' || d.month === sMonth);
+
+    if (matchYear && matchMonth) {
+      for (let u of VALID_TPS_UNITS) {
+        if ((d.boxesPerCC && d.boxesPerCC[u] > 0) || (d.bdPerCC && d.bdPerCC[u] > 0)) {
+          activeUnitSet.add(u);
         }
-        if (sCrane === 'ALL') { tBox += d.boxes || 0; tBd += d.bd || 0; tDt += d.downtime || 0; }
-        else {
-          let targetUnit = sCrane.toUpperCase().trim();
-          tBox += (d.boxesPerCC && d.boxesPerCC[targetUnit]) || 0; tBd += (d.bdPerCC && d.bdPerCC[targetUnit]) || 0; tDt += (d.dtPerCC && d.dtPerCC[targetUnit]) || 0;
-        }
-        if (d.workOrders) activeWO = activeWO.concat(d.workOrders);
+      }
+      if (sCrane === 'ALL') {
+        tBox += d.boxes || 0;
+        tBd += d.bd || 0;
+        tDt += d.downtime || 0;
+      } else {
+        let targetUnit = sCrane.toUpperCase().trim();
+        tBox += (d.boxesPerCC && d.boxesPerCC[targetUnit]) || 0;
+        tBd += (d.bdPerCC && d.bdPerCC[targetUnit]) || 0;
+        tDt += (d.dtPerCC && d.dtPerCC[targetUnit]) || 0;
+      }
+      if (d.workOrders) {
+        activeWO = activeWO.concat(d.workOrders);
       }
     }
   }
@@ -421,18 +605,21 @@ function applyGlobalFilter() {
   if (sCrane !== 'ALL') {
     let targetUnit = sCrane.toUpperCase().trim();
     activeWO = activeWO.filter(w => normalizeUnitAsset(w.asset) === targetUnit);
-    displayUnitCount = 1; indText = `Tahun ${sYear} (${sMonth}) | Filter Unit: ${targetUnit}`;
+    displayUnitCount = 1;
+    indText = `Filter: ${sYear === 'ALL' ? 'Semua Tahun' : 'Tahun ' + sYear} (${sMonth}) | Unit: ${targetUnit}`;
   } else {
-    indText = `Arsip Terpusat Tahun ${sYear} (${sMonth})`;
+    indText = `Arsip Data: ${sYear === 'ALL' ? 'Semua Tahun' : 'Tahun ' + sYear} (${sMonth === 'ALL' ? 'Semua Bulan' : sMonth})`;
   }
 
   if (singleDate) {
     activeWO = activeWO.filter(w => w.tanggal === singleDate);
-    tBd = activeWO.length; tDt = activeWO.reduce((sum, w) => sum + (w.durasiNum || 0), 0);
+    tBd = activeWO.length;
+    tDt = activeWO.reduce((sum, w) => sum + (w.durasiNum || 0), 0);
     indText += ` | Tgl: ${singleDate}`;
   }
 
   let tMmbf = tBd > 0 ? Math.round(tBox / tBd) : tBox;
+
   document.getElementById('activeFileIndicator').innerText = indText;
   document.getElementById('cardTotalCrane').innerText = displayUnitCount;
   document.getElementById('cardTotalBoxes').innerText = tBox > 0 ? tBox.toLocaleString('id-ID') : "0";
@@ -445,16 +632,30 @@ function applyGlobalFilter() {
     activeWO.map((w, idx) => `
       <tr class="border-b hover:bg-slate-50 text-[11px] md:text-xs bg-white">
         <td class="p-3 text-center font-mono font-semibold">${idx + 1}</td>
-        <td class="p-3 font-mono text-slate-700">${w.tanggal}</td>
-        <td class="p-3 font-bold text-primary font-mono">${w.woNum}</td>
-        <td class="p-3 text-slate-700 max-w-[200px] whitespace-normal break-words">${w.desc}</td>
-        <td class="p-3"><span class="${w.type.toLowerCase().includes('breakdown') ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'} px-2 py-0.5 rounded text-[9px] font-bold">${w.type}</span></td>
-        <td class="p-3 font-bold">${w.asset}</td>
+        <td class="p-3 font-mono text-slate-700 whitespace-nowrap">${w.tanggal}</td>
+        <td class="p-3 font-bold text-primary font-mono whitespace-nowrap">${w.woNum}</td>
+        <td class="p-3 text-slate-700 max-w-[200px] md:max-w-xs whitespace-normal break-words">${w.desc}</td>
+        <td class="p-3"><span class="${w.type.toLowerCase().includes('breakdown') ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'} px-2 py-0.5 rounded text-[9px] font-bold whitespace-nowrap">${w.type}</span></td>
+        <td class="p-3 font-bold whitespace-nowrap">${w.asset}</td>
         <td class="p-3 font-mono whitespace-nowrap">${w.durasiStr}</td>
-        <td class="p-3 text-slate-600 font-semibold text-[10px]">${w.task}</td>
+        <td class="p-3 text-slate-600 font-semibold text-[10px] whitespace-nowrap">${w.task}</td>
+        <td class="p-3 text-center">
+          <button onclick="deleteSingleWorkOrder('${w.tanggal.split('-')[0]}', '${getIndonesianMonthName(w.tanggal.split('-')[1])}', '${w.woNum}', '${w.asset}')" 
+            title="Hapus Work Order ${w.woNum}" 
+            class="bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 w-7 h-7 rounded-lg inline-flex items-center justify-center transition shadow-sm">
+            <i class="fa-solid fa-trash-can text-xs"></i>
+          </button>
+        </td>
       </tr>
-    `).join('') : `<tr><td colspan="8" class="p-6 text-center text-slate-400">Tidak ada Work Order pada filter tersebut</td></tr>`;
+    `).join('') : `<tr><td colspan="9" class="p-6 text-center text-slate-400">- Belum Ada Data Work Order -</td></tr>`;
+
   renderCharts(sYear, sMonth, activeWO, activeCCArray);
+}
+
+function getIndonesianMonthName(monthDigitStr) {
+  const m = parseInt(monthDigitStr, 10);
+  const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  return months[m - 1] || 'Januari';
 }
 
 function renderUnitMasterTable(activeCCArray) {
@@ -471,9 +672,9 @@ function calculateCustomMax(maxVal, stepSize) {
   return Math.ceil(maxVal / stepSize) * stepSize;
 }
 
-function renderCharts(sYear = '2026', sMonth = 'ALL', activeWO = [], activeCCArray = VALID_TPS_UNITS) {
+function renderCharts(sYear = 'ALL', sMonth = 'ALL', activeWO = [], activeCCArray = VALID_TPS_UNITS) {
   const subEl = document.getElementById('chartSubtitle');
-  if (subEl) subEl.innerText = `Tahun ${sYear} (${sMonth})`;
+  if (subEl) subEl.innerText = `${sYear === 'ALL' ? 'Semua Tahun' : 'Tahun ' + sYear} (${sMonth === 'ALL' ? 'Semua Bulan' : sMonth})`;
   let chartLabels = []; let chartBox = []; let chartBd = []; let chartMmbf = [];
 
   if (sMonth === 'ALL') {
@@ -483,7 +684,7 @@ function renderCharts(sYear = '2026', sMonth = 'ALL', activeWO = [], activeCCArr
 
     for (let k in uploadedDataStore) {
       let item = uploadedDataStore[k];
-      if (item.year === sYear) {
+      if (sYear === 'ALL' || item.year === String(sYear)) {
         let idx = mNames.indexOf(item.month);
         if (idx !== -1) {
           activeCCArray.forEach(u => { chartBox[idx] += (item.boxesPerCC && item.boxesPerCC[u]) || 0; chartBd[idx] += (item.bdPerCC && item.bdPerCC[u]) || 0; });
@@ -494,20 +695,23 @@ function renderCharts(sYear = '2026', sMonth = 'ALL', activeWO = [], activeCCArr
   } else {
     let maxDaysInMonth = 31;
     if (['April', 'Juni', 'September', 'November'].includes(sMonth)) maxDaysInMonth = 30;
-    else if (sMonth === 'Februari') maxDaysInMonth = (parseInt(sYear) % 4 === 0) ? 29 : 28;
+    else if (sMonth === 'Februari') maxDaysInMonth = 29;
 
     chartLabels = Array.from({ length: maxDaysInMonth }, (_, i) => String(i + 1));
     chartBox = new Array(maxDaysInMonth).fill(0); chartBd = new Array(maxDaysInMonth).fill(0); chartMmbf = new Array(maxDaysInMonth).fill(0);
-    let targetD = uploadedDataStore[`${sYear}-${sMonth}`];
-    if (targetD) {
-      for (let i = 0; i < maxDaysInMonth; i++) {
-        let sumBox = 0; let sumBd = 0;
-        activeCCArray.forEach(u => {
-          if (targetD.boxesDailyPerCC && targetD.boxesDailyPerCC[u]) sumBox += targetD.boxesDailyPerCC[u][i];
-          if (targetD.bdDailyPerCC && targetD.bdDailyPerCC[u]) sumBd += targetD.bdDailyPerCC[u][i];
-        });
-        chartBox[i] = sumBox; chartBd[i] = sumBd;
-        chartMmbf[i] = sumBd > 0 ? Math.round(sumBox / sumBd) : sumBox;
+
+    for (let k in uploadedDataStore) {
+      let item = uploadedDataStore[k];
+      if ((sYear === 'ALL' || item.year === String(sYear)) && item.month === sMonth) {
+        for (let i = 0; i < maxDaysInMonth; i++) {
+          let sumBox = 0; let sumBd = 0;
+          activeCCArray.forEach(u => {
+            if (item.boxesDailyPerCC && item.boxesDailyPerCC[u]) sumBox += item.boxesDailyPerCC[u][i] || 0;
+            if (item.bdDailyPerCC && item.bdDailyPerCC[u]) sumBd += item.bdDailyPerCC[u][i] || 0;
+          });
+          chartBox[i] += sumBox; chartBd[i] += sumBd;
+          chartMmbf[i] = chartBd[i] > 0 ? Math.round(chartBox[i] / chartBd[i]) : chartBox[i];
+        }
       }
     }
   }
@@ -540,7 +744,7 @@ function renderCharts(sYear = '2026', sMonth = 'ALL', activeWO = [], activeCCArr
   VALID_TPS_UNITS.forEach(u => { unitBoxesMap[u] = 0; unitBdCountMap[u] = 0; unitTimeOpMap[u] = 0; });
   for (let k in uploadedDataStore) {
     let d = uploadedDataStore[k];
-    if (d.year === sYear && (sMonth === 'ALL' || d.month === sMonth)) {
+    if ((sYear === 'ALL' || d.year === String(sYear)) && (sMonth === 'ALL' || d.month === sMonth)) {
       activeCCArray.forEach(u => {
         unitBoxesMap[u] += (d.boxesPerCC && d.boxesPerCC[u]) || 0; unitTimeOpMap[u] += (d.timeOpPerCC && d.timeOpPerCC[u]) || 0; unitBdCountMap[u] += (d.bdPerCC && d.bdPerCC[u]) || 0;
       });
@@ -575,21 +779,280 @@ function renderCharts(sYear = '2026', sMonth = 'ALL', activeWO = [], activeCCArr
 }
 
 function renderFileArchiveTable() {
-  const tb = document.getElementById('fileArchiveTableBody');
-  let keys = Object.keys(uploadedDataStore);
-  if (!keys.length) return tb.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">Belum ada arsip database</td></tr>`;
-  tb.innerHTML = keys.map(k => {
-    let i = uploadedDataStore[k];
-    let deleteBtnHtml = (currentUserRole === 'admin')
-      ? `<button onclick="deleteFileRecord('${k}')" class="bg-red-600 hover:bg-red-700 text-white text-[10px] px-2 py-1 rounded shadow">Hapus</button>`
-      : `<span class="text-slate-400 text-[10px] italic">Khusus Admin</span>`;
-    return `<tr class="border-b"><td class="p-3 font-bold text-primary text-[11px] md:text-xs">${i.fileName}</td><td class="p-3 text-[11px] md:text-xs font-semibold">${i.month} ${i.year}</td><td class="p-3 text-[11px] md:text-xs">${(i.boxes || 0).toLocaleString('id-ID')}</td><td class="p-3 text-[11px] md:text-xs text-rose-600 font-bold">${i.bd || 0} BD</td><td class="p-3">${deleteBtnHtml}</td></tr>`;
-  }).join('');
+  const container = document.getElementById('archiveDrillContainer');
+  const backBtn = document.getElementById('archiveBackBtn');
+  const breadcrumb = document.getElementById('archiveBreadcrumb');
+  if (!container) return;
+
+  if (archiveCurrentLevel === 'YEAR') {
+    if (backBtn) backBtn.classList.add('hidden');
+    if (breadcrumb) breadcrumb.innerHTML = `Pilih Tahun untuk melihat rincian bulan. Ikon <i class="fa-solid fa-download text-primary mx-1"></i> untuk Unduh, Ikon <i class="fa-solid fa-trash-can text-rose-500 mx-1"></i> untuk Hapus.`;
+
+    const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019'];
+
+    container.innerHTML = `
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        ${years.map(yr => {
+      let totalWoYr = 0; let totalBoxYr = 0;
+      for (let k in uploadedDataStore) {
+        if (uploadedDataStore[k].year === yr) {
+          totalWoYr += uploadedDataStore[k].workOrders ? uploadedDataStore[k].workOrders.length : 0;
+          totalBoxYr += uploadedDataStore[k].boxes || 0;
+        }
+      }
+      let hasData = totalWoYr > 0 || totalBoxYr > 0;
+
+      return `
+            <div onclick="drillToMonth('${yr}')" 
+              class="bg-white rounded-2xl border ${hasData ? 'border-primary/30 hover:border-primary shadow-sm hover:shadow-md' : 'border-slate-200 opacity-60'} p-4 sm:p-5 cursor-pointer transition relative group flex flex-col justify-between h-40 sm:h-44">
+              
+              <div class="flex justify-between items-start">
+                <div>
+                  <span class="text-[10px] sm:text-xs font-bold text-primary uppercase tracking-wider block mb-1">Arsip Tahunan</span>
+                  <h3 class="text-2xl sm:text-3xl font-black text-slate-800 font-mono">${yr}</h3>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <button onclick="event.stopPropagation(); exportWorkOrdersExcel('${yr}', '')" title="Unduh Rekap Tahun ${yr}"
+                    class="bg-sky-100 hover:bg-primary hover:text-white text-primary w-8 h-8 rounded-xl flex items-center justify-center transition shadow-sm">
+                    <i class="fa-solid fa-download text-xs"></i>
+                  </button>
+                  ${hasData ? `
+                  <button onclick="event.stopPropagation(); deleteArchiveData('${yr}', '')" title="Hapus Data Tahun ${yr}"
+                    class="bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 w-8 h-8 rounded-xl flex items-center justify-center transition shadow-sm">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                  </button>` : ''}
+                </div>
+              </div>
+
+              <div class="space-y-1 pt-3 border-t border-slate-100">
+                <div class="flex justify-between text-xs font-semibold text-slate-600">
+                  <span>Total WO:</span>
+                  <span class="font-mono text-slate-900">${totalWoYr} WO</span>
+                </div>
+                <div class="flex justify-between text-xs font-semibold text-slate-600">
+                  <span>Produksi:</span>
+                  <span class="font-mono text-emerald-600">${totalBoxYr.toLocaleString('id-ID')} Box</span>
+                </div>
+              </div>
+
+            </div>
+          `;
+    }).join('')}
+      </div>
+    `;
+
+  } else if (archiveCurrentLevel === 'MONTH') {
+    if (backBtn) backBtn.classList.remove('hidden');
+    if (breadcrumb) breadcrumb.innerHTML = `<span class="font-bold text-primary">Tahun ${archiveSelectedYear}</span> $\rightarrow$ Pilih Bulan untuk detail harian.`;
+
+    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+    container.innerHTML = `
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
+        ${months.map(m => {
+      let key = `${archiveSelectedYear}-${m}`;
+      let dataM = uploadedDataStore[key];
+      let woCount = dataM && dataM.workOrders ? dataM.workOrders.length : 0;
+      let boxCount = dataM ? (dataM.boxes || 0) : 0;
+      let hasData = woCount > 0 || boxCount > 0;
+
+      return `
+            <div onclick="drillToDaily('${archiveSelectedYear}', '${m}')"
+              class="bg-white rounded-xl border ${hasData ? 'border-teal-400/40 hover:border-teal-500 shadow-sm hover:shadow-md' : 'border-slate-200 opacity-60'} p-3.5 sm:p-4 cursor-pointer transition relative group flex flex-col justify-between h-36">
+              
+              <div class="flex justify-between items-start">
+                <div>
+                  <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">${archiveSelectedYear}</span>
+                  <h4 class="text-base sm:text-lg font-bold text-slate-800">${m}</h4>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button onclick="event.stopPropagation(); exportWorkOrdersExcel('${archiveSelectedYear}', '${m}')" title="Unduh Rekap ${m} ${archiveSelectedYear}"
+                    class="bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-600 w-7 h-7 rounded-lg flex items-center justify-center transition shadow-sm">
+                    <i class="fa-solid fa-download text-xs"></i>
+                  </button>
+                  ${hasData ? `
+                  <button onclick="event.stopPropagation(); deleteArchiveData('${archiveSelectedYear}', '${m}')" title="Hapus Data ${m} ${archiveSelectedYear}"
+                    class="bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 w-7 h-7 rounded-lg flex items-center justify-center transition shadow-sm">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                  </button>` : ''}
+                </div>
+              </div>
+
+              <div class="space-y-0.5 pt-2 border-t border-slate-100 text-[10px] sm:text-[11px]">
+                <div class="flex justify-between text-slate-600">
+                  <span>WO Maintenance:</span>
+                  <span class="font-mono font-bold text-slate-900">${woCount} WO</span>
+                </div>
+                <div class="flex justify-between text-slate-600">
+                  <span>Produksi:</span>
+                  <span class="font-mono font-bold text-emerald-600">${boxCount.toLocaleString('id-ID')} Box</span>
+                </div>
+              </div>
+
+            </div>
+          `;
+    }).join('')}
+      </div>
+    `;
+
+  } else if (archiveCurrentLevel === 'DAILY') {
+    if (backBtn) backBtn.classList.remove('hidden');
+    if (breadcrumb) breadcrumb.innerHTML = `<span class="font-bold text-primary">Tahun ${archiveSelectedYear}</span> $\rightarrow$ <span class="font-bold text-emerald-600">${archiveSelectedMonth}</span> $\rightarrow$ Rincian Data Harian & Work Order`;
+
+    let key = `${archiveSelectedYear}-${archiveSelectedMonth}`;
+    let dataM = uploadedDataStore[key];
+    let woList = dataM && dataM.workOrders ? dataM.workOrders : [];
+
+    container.innerHTML = `
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-3 sm:p-4 bg-slate-50 border-b flex justify-between items-center flex-wrap gap-2">
+          <h3 class="font-bold text-slate-800 text-xs sm:text-sm md:text-base">Daftar Work Order Harian - ${archiveSelectedMonth} ${archiveSelectedYear}</h3>
+          <span class="text-[11px] sm:text-xs bg-sky-100 text-primary font-bold px-3 py-1 rounded-full">${woList.length} Total WO</span>
+        </div>
+        <div class="max-h-[60vh] overflow-y-auto overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs md:text-sm min-w-[750px]">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 border-b sticky top-0 font-bold text-[11px] sm:text-xs">
+                <th class="p-3 text-center w-10">No</th>
+                <th class="p-3">Tanggal</th>
+                <th class="p-3">No. Work Order</th>
+                <th class="p-3">Keterangan / Kendala</th>
+                <th class="p-3">Work Type</th>
+                <th class="p-3">Asset</th>
+                <th class="p-3">Durasi</th>
+                <th class="p-3">Subsystem</th>
+                <th class="p-3 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 bg-white">
+              ${woList.length > 0 ? woList.map((w, idx) => `
+                <tr class="hover:bg-slate-50 text-[11px] sm:text-xs">
+                  <td class="p-3 text-center font-mono font-semibold">${idx + 1}</td>
+                  <td class="p-3 font-mono text-slate-700 whitespace-nowrap">${w.tanggal}</td>
+                  <td class="p-3 font-bold text-primary font-mono whitespace-nowrap">${w.woNum}</td>
+                  <td class="p-3 text-slate-700 max-w-[200px] sm:max-w-xs whitespace-normal break-words">${w.desc}</td>
+                  <td class="p-3"><span class="${w.type.toLowerCase().includes('breakdown') ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'} px-2 py-0.5 rounded text-[9px] font-bold whitespace-nowrap">${w.type}</span></td>
+                  <td class="p-3 font-bold whitespace-nowrap">${w.asset}</td>
+                  <td class="p-3 font-mono whitespace-nowrap">${w.durasiStr}</td>
+                  <td class="p-3 text-slate-600 font-semibold text-[10px] whitespace-nowrap">${w.task}</td>
+                  <td class="p-3 text-center">
+                    <button onclick="deleteSingleWorkOrder('${archiveSelectedYear}', '${archiveSelectedMonth}', '${w.woNum}', '${w.asset}')" 
+                      title="Hapus Work Order ${w.woNum}" 
+                      class="bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-600 w-7 h-7 rounded-lg inline-flex items-center justify-center transition shadow-sm">
+                      <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                  </td>
+                </tr>
+              `).join('') : `<tr><td colspan="9" class="p-6 text-center text-slate-400">Tidak ada rincian Work Order di bulan ${archiveSelectedMonth} ${archiveSelectedYear}</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
 }
 
-// ==========================================
-// MANAJEMEN RIWAYAT CHAT & GOOGLE GEMINI API
-// ==========================================
+function deleteArchiveData(tahun, bulan = '') {
+  const targetLabel = bulan ? `${bulan} ${tahun}` : `Tahun ${tahun}`;
+  if (confirm(`KONFIRMASI HAPUS DATA:\nApakah Anda yakin ingin menghapus seluruh data pada ${targetLabel}?`)) {
+    for (let k in uploadedDataStore) {
+      const d = uploadedDataStore[k];
+      const matchYear = d.year === String(tahun);
+      const matchMonth = !bulan || d.month === bulan;
+
+      if (matchYear && matchMonth) {
+        delete uploadedDataStore[k];
+      }
+    }
+    saveStore();
+    renderUI();
+    renderFileArchiveTable();
+    showToast(`Data ${targetLabel} berhasil dihapus.`);
+  }
+}
+
+function drillToMonth(year) {
+  archiveCurrentLevel = 'MONTH';
+  archiveSelectedYear = year;
+  renderFileArchiveTable();
+}
+
+function drillToDaily(year, month) {
+  archiveCurrentLevel = 'DAILY';
+  archiveSelectedYear = year;
+  archiveSelectedMonth = month;
+  renderFileArchiveTable();
+}
+
+function navigateArchiveBack() {
+  if (archiveCurrentLevel === 'DAILY') {
+    archiveCurrentLevel = 'MONTH';
+  } else if (archiveCurrentLevel === 'MONTH') {
+    archiveCurrentLevel = 'YEAR';
+    archiveSelectedYear = null;
+    archiveSelectedMonth = null;
+  }
+  renderFileArchiveTable();
+}
+
+function exportWorkOrdersExcel(tahun = '', bulan = '') {
+  let filteredWOs = [];
+
+  for (let k in uploadedDataStore) {
+    const d = uploadedDataStore[k];
+    const matchYear = !tahun || d.year === String(tahun);
+    const matchMonth = !bulan || d.month === bulan;
+
+    if (matchYear && matchMonth && d.workOrders) {
+      filteredWOs = filteredWOs.concat(d.workOrders);
+    }
+  }
+
+  if (filteredWOs.length === 0) {
+    alert(`Tidak ada data Work Order untuk diekspor pada filter: ${tahun || 'Semua Tahun'} ${bulan || ''}`);
+    return;
+  }
+
+  const exportData = filteredWOs.map((w, index) => ({
+    'No': index + 1,
+    'No. Work Order': w.woNum || '-',
+    'Asset / Unit CC': w.asset || '-',
+    'Work Type': w.type || '-',
+    'Sistem (Big 6)': w.task || '-',
+    'Keterangan / Masalah': w.desc || '-',
+    'Tanggal': w.tanggal || '-',
+    'Sumber Tanggal': w.dateSource || 'Actual',
+    'Durasi Downtime (Jam)': Number(w.durasiNum || 0),
+    'Status': w.status || 'COMPLETED'
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+  worksheet['!cols'] = [
+    { wch: 5 },
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 15 },
+    { wch: 22 },
+    { wch: 40 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 12 }
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Data WO Maintenance');
+
+  let fileName = `Report_WO_TPS`;
+  if (tahun) fileName += `_${tahun}`;
+  if (bulan) fileName += `_${bulan}`;
+  fileName += `.xlsx`;
+
+  XLSX.writeFile(workbook, fileName, { bookType: 'xlsx', type: 'binary' });
+  showToast(`Berhasil mengunduh Excel: ${fileName}`);
+}
+
 function initUserChatSessions() {
   if (!allUserChatSessions[currentUsername]) allUserChatSessions[currentUsername] = [];
   let userSessions = allUserChatSessions[currentUsername];
@@ -607,7 +1070,7 @@ function createNewChatSession() {
   let newId = 'session_' + Date.now();
   let newSession = {
     id: newId, title: 'Percakapan Baru',
-    messages: [{ sender: 'ai', text: `Halo rekan **${currentUsername}**, silakan tanyakan kendala lampu kabin, prosedur perbaikan komponen crane, atau rekapitulasi data TPS.` }]
+    messages: [{ sender: 'ai', text: `Halo rekan **${currentUsername}**, silakan tanyakan kendala teknis atau informasi perbaikan operasional Container Crane PT TPS.` }]
   };
   allUserChatSessions[currentUsername].unshift(newSession);
   activeSessionId = newId; localStorage.setItem('tps_active_session_id', activeSessionId);
@@ -672,36 +1135,9 @@ function renderActiveChatMessages() {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-const EXPERT_CC_KB = [
-  {
-    keywords: ['lampu', 'kabin', 'penerangan', 'lampu operator', 'lampu sorot', 'lampu indikator'],
-    title: 'Sistem Penerangan Kabin & Panel Operator',
-    guideline: `🛠️ **Panduan Teknis Perbaikan Lampu Kabin / Penerangan:**\n1. **K3 & LOTO:** Pasang gembok LOTO (*Lockout/Tagout*) pada panel sumber listrik AC/DC kabin sebelum menyentuh kabel.\n2. **Cek Sekring (Fuse) & MCB:** Periksa box panel elektrik di dalam kabin operator, pastikan MCB atau sekring tidak putus atau *trip*.\n3. **Kabel & Soket Plafon:** Periksa koneksi soket kabel di atas plafon kabin, pastikan tidak ada kabel kendur atau korosi akibat uap air laut.\n4. **Bohlam / LED Driver:** Periksa tegangan output jalur (umumnya 24V DC / 220V AC). Ganti lampu jika modul LED sudah terbakar.`
-  },
-  {
-    keywords: ['hoist', 'angkat', 'main hoist', 'wire rope', 'drum', 'overload', 'limit switch hoist'],
-    title: 'Sistem Hoist & Pengangkatan (Main Hoist)',
-    guideline: `🛠️ **Panduan Teknis Hoist System:**\n1. **K3 & LOTO:** Pastikan crane dalam posisi *Zero Energy State* dan rem mekanis pengaman terkunci sebelum inspeksi drum.\n2. **Inspeksi Rem (Hoist Brake):** Periksa celah udara (*air gap*) dan kampas rem (*brake lining*).\n3. **Wire Rope & Drum:** Pastikan kawat seling tidak mengalami *birdcaging* atau putus helai.\n4. **Inverter & PLC Fault:** Periksa parameter inverter dan suhu motor hoist secara berkala.`
-  },
-  {
-    keywords: ['spreader', 'flipper', 'twistlock', 'telescopic', 'landing', 'landed', 'pin'],
-    title: 'Sistem Spreader & Twistlock',
-    guideline: `🛠️ **Panduan Teknis Spreader:**\n1. **K3 & LOTO:** Amankan posisi spreader pada *maintenance trestle* atau posisi *landed* penuh.\n2. **Twistlock Pin & Sensor Proximity:** Periksa apakah pin macet atau sensor posisi *lock/unlock* tertutup kotoran/grease.\n3. **Flipper Arm:** Cek aktuator hidrolik flipper dan pastikan selang tidak mengalami kebocoran.`
-  },
-  {
-    keywords: ['gantry', 'travel', 'rail', 'klamp', 'storm pin', 'anemometer'],
-    title: 'Sistem Gantry (Crane Travel)',
-    guideline: `🛠️ **Panduan Teknis Gantry Travel:**\n1. **K3 & LOTO:** Pastikan jalur rel steril dan *storm pin / rail clamp* dilepas sesuai prosedur aman.\n2. **Roda & Rel:** Cek keausan roda gantry (*gantry wheels*) serta kesikuan rel (*rail alignment*).\n3. **Storm Lock:** Pastikan pengunci angin (*rail clamp*) tidak mencengkeram saat crane bergerak.`
-  },
-  {
-    keywords: ['trolley', 'puly', 'kabel tray', 'festoon', 'tow cable'],
-    title: 'Sistem Trolley & Festoon',
-    guideline: `🛠️ **Panduan Teknis Trolley:**\n1. **K3 & LOTO:** Lakukan pemutusan sumber daya utama (*Main Breaker LOTO*).\n2. **Festoon System:** Periksa *cable carrier* dan rol pengantar, pastikan kabel daya tidak terjepit.\n3. **Drive & Gearbox:** Cek pelumasan gearbox trolley dan sensor batas jalan (*limit switch*).`
-  }
-];
-
 async function sendAiQuery() {
   const inputEl = document.getElementById('aiUserInput');
+  if (!inputEl) return;
   const rawQ = inputEl.value.trim();
   if (!rawQ) return;
 
@@ -719,101 +1155,65 @@ async function sendAiQuery() {
   renderActiveChatMessages();
   inputEl.value = "";
 
-  currentSession.messages.push({ sender: 'ai', actionId: 'loading_ai', text: '🤖 Sedang menganalisis kendala teknis dan riwayat Work Order...' });
+  currentSession.messages.push({ sender: 'ai', actionId: 'loading_ai', text: '🤖 Sedang menganalisis melalui server backend Node.js...' });
   renderActiveChatMessages();
 
   let aiReply = "";
-  let activeKey = userCustomApiKey || "";
 
-  if (activeKey) {
-    try {
-      const systemInstruction = `Anda adalah "AI Expert Maintenance & Reliability Engineer" di PT Terminal Petikemas Surabaya (TPS). 
-Tugas utama Anda:
-1. Memberikan solusi troubleshooting, analisis akar masalah (root cause), dan prosedur perbaikan teknis yang presisi dan aman untuk Container Crane.
-2. CEGAH SALAH TANGKAP KONTEKS (Anti-False Match).
-3. WAJIB MENYERTAKAN STANDAR K3 & LOTO (Lockout/Tagout) pada setiap instruksi perbaikan teknis.
-4. Format Markdown rapi. Gunakan bahasa Indonesia profesional.`;
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            { role: 'user', parts: [{ text: `${systemInstruction}\n\nPertanyaan Teknisi: ${rawQ}` }] }
-          ]
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.candidates && data.candidates[0].content.parts[0].text) {
-          aiReply = data.candidates[0].content.parts[0].text;
-        }
-      }
-    } catch (err) {
-      console.warn("API Gemini gagal dipanggil, beralih ke Knowledge Base lokal:", err);
-    }
-  }
-
-  if (!aiReply) {
-    let lowerQ = rawQ.toLowerCase();
-    let bestKbMatch = null;
-    let maxKbScore = 0;
-
-    EXPERT_CC_KB.forEach(kb => {
-      let score = 0;
-      kb.keywords.forEach(kw => {
-        if (lowerQ.includes(kw)) score += (kw.length > 3 ? 3 : 1);
-      });
-      if (score > maxKbScore) {
-        maxKbScore = score;
-        bestKbMatch = kb;
-      }
+  try {
+    const response = await fetch('http://localhost:3000/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: rawQ,
+        maintenanceData: Object.entries(uploadedDataStore).flatMap(
+          ([periode, data]) =>
+            (data.workOrders || []).map(wo => ({
+              periode: periode,
+              tanggal: wo.tanggal || '',
+              woNum: wo.woNum || '',
+              asset: wo.asset || '',
+              type: wo.type || '',
+              desc: wo.desc || '',
+              task: wo.task || '',
+              durasiStr: wo.durasiStr || '',
+              status: wo.status || ''
+            }))
+        )
+      })
     });
 
-    let bestWoMatch = null;
-    let maxWoScore = 0;
-    let searchWords = lowerQ.split(/[^a-z0-9]+/).filter(w => w.length > 3);
+    const data = await response.json();
 
-    if (searchWords.length > 0) {
-      for (let k in uploadedDataStore) {
-        if (uploadedDataStore[k].workOrders) {
-          uploadedDataStore[k].workOrders.forEach(w => {
-            let textLower = (w.desc + " " + w.task + " " + w.asset).toLowerCase();
-            let matchScore = 0;
-            searchWords.forEach(sw => {
-              if (textLower.includes(sw)) matchScore += 2;
-            });
-            if (matchScore > maxWoScore) {
-              maxWoScore = matchScore;
-              bestWoMatch = w;
-            }
-          });
-        }
-      }
+    if (response.ok && typeof data.answer === 'string' && data.answer.trim()) {
+      // Format respons dari server.js yang terbaru
+      aiReply = data.answer;
+
+    } else if (
+      response.ok &&
+      data.candidates?.[0]?.content?.parts?.[0]?.text
+    ) {
+      // Mendukung format respons Gemini secara langsung
+      aiReply = data.candidates[0].content.parts[0].text;
+
+    } else if (data.error) {
+      // Menampilkan pesan error dari backend atau Gemini API
+      const errorMessage =
+        typeof data.error === 'string'
+          ? data.error
+          : data.error.message || JSON.stringify(data.error);
+
+      aiReply = `⚠️ **Error dari API Gemini:** ${errorMessage}`;
+
+    } else {
+      // Menampilkan informasi jika format respons tidak sesuai
+      console.error('Respons backend tidak sesuai:', data);
+
+      aiReply = `⚠️ **Peringatan Server:** Backend merespons, tetapi jawaban AI tidak ditemukan. Status HTTP: ${response.status}.`;
     }
-
-    aiReply = `🤖 **Respon Pakar AI Maintenance PT TPS:**\n\n`;
-
-    if (bestKbMatch && maxKbScore >= 3) {
-      aiReply += `${bestKbMatch.guideline}\n\n`;
-    }
-
-    if (bestWoMatch && maxWoScore >= 4) {
-      aiReply += `📁 **Referensi Arsip Work Order Relevan:**\n`;
-      aiReply += `• **Problem:** *"${bestWoMatch.desc}"*\n`;
-      aiReply += `• **Unit:** ${bestWoMatch.asset} | **Tanggal:** ${bestWoMatch.tanggal} | **No. WO:** ${bestWoMatch.woNum}\n`;
-      aiReply += `• **Sistem:** ${bestWoMatch.task} (Downtime: ${bestWoMatch.durasiStr})\n\n`;
-    }
-
-    if (!bestKbMatch || maxKbScore < 3) {
-      if (!bestWoMatch || maxWoScore < 4) {
-        aiReply += `🛠️ **Panduan Diagnostik Umum:**\n`;
-        aiReply += `Untuk pertanyaan **"${rawQ}"**, pastikan Anda melakukan pemeriksaan fisik pada komponen terkait, ikuti standar K3 & prosedur LOTO, serta verifikasi status interlock PLC.\n\n`;
-      }
-    }
-
-    aiReply += `💡 *Selalu utamakan keselamatan kerja dan pastikan LOTO terpasang sebelum perbaikan di lapangan.*`;
+  } catch (err) {
+    console.warn("Gagal terhubung ke backend lokal:", err);
+    aiReply = "⚠️ **Gagal terhubung ke server lokal (`http://localhost:3000`).** Pastikan Anda menjalankan perintah `node server.js` di terminal!";
   }
 
   currentSession.messages = currentSession.messages.filter(m => m.actionId !== 'loading_ai');
