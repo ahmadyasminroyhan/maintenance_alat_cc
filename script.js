@@ -1160,76 +1160,50 @@ async function sendAiQuery() {
 
   let aiReply = "";
 
+
   try {
     const maintenanceData = Object.entries(uploadedDataStore).flatMap(
-      ([periode, data]) =>
-        (data.workOrders || []).map(wo => ({
-          periode,
-          tanggal: wo.tanggal || '',
-          woNum: wo.woNum || '',
-          asset: wo.asset || '',
-          type: wo.type || '',
-          desc: wo.desc || '',
-          task: wo.task || '',
-          durasiStr: wo.durasiStr || '',
-          status: wo.status || ''
-        }))
+      ([periode, data]) => (data.workOrders || []).map(wo => ({
+        periode,
+        tanggal: wo.tanggal || '',
+        woNum: wo.woNum || '',
+        asset: wo.asset || '',
+        type: wo.type || '',
+        desc: wo.desc || '',
+        task: wo.task || '',
+        durasiStr: wo.durasiStr || '',
+        status: wo.status || ''
+      }))
     );
 
-    const response = await fetch('http://localhost:3000/api/chat', {
+    console.log('Total WO yang dikirim ke AI:', maintenanceData.length);
+
+    const response = await fetch('http://127.0.0.1:3000/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      const maintenanceData = Object.entries(uploadedDataStore).flatMap(
-        ([periode, data]) =>
-          (data.workOrders || []).map(wo => ({
-            periode,
-            tanggal: wo.tanggal || '',
-            woNum: wo.woNum || '',
-            asset: wo.asset || '',
-            type: wo.type || '',
-            desc: wo.desc || '',
-            task: wo.task || '',
-            status: wo.status || ''
-          }))
-      );
-
-      const response = await fetch('http://localhost:3000/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: rawQ,
-          maintenanceData
-        })
-      });
+      body: JSON.stringify({ prompt: rawQ, maintenanceData })
     });
 
     const data = await response.json();
 
-    if (response.ok && typeof data.answer === 'string' && data.answer.trim()) {
+    if (!response.ok) {
+      aiReply = `⚠️ Error server: ${data.error || 'Gagal mendapatkan jawaban dari AI.'}`;
+    } else if (data.answer) {
       aiReply = data.answer;
-    } else if (
-      response.ok &&
-      data.candidates?.[0]?.content?.parts?.[0]?.text
-    ) {
-      aiReply = data.candidates[0].content.parts[0].text;
-    } else if (data.error) {
-      const errorMessage =
-        typeof data.error === 'string'
-          ? data.error
-          : data.error.message || JSON.stringify(data.error);
-
-      aiReply = `⚠️ **Error dari API Gemini:** ${errorMessage}`;
     } else {
-      console.error('Respons backend tidak sesuai:', data);
-      aiReply =
-        `⚠️ Backend tidak mengembalikan jawaban AI. Status HTTP: ${response.status}.`;
+      aiReply = '⚠️ Server merespons, tetapi jawaban AI tidak ditemukan.';
     }
+
   } catch (err) {
-    console.warn("Gagal terhubung ke backend lokal:", err);
-    aiReply = "⚠️ **Gagal terhubung ke server lokal (`http://localhost:3000`).** Pastikan Anda menjalankan perintah `node server.js` di terminal!";
+    console.error('Gagal menghubungi backend AI:', err);
+    aiReply =
+      '⚠️ Gagal terhubung ke backend AI. ' +
+      'Pastikan server Node.js berjalan dan alamat API sudah benar.';
   }
 
-  currentSession.messages = currentSession.messages.filter(m => m.actionId !== 'loading_ai');
+  currentSession.messages = currentSession.messages.filter(
+    m => m.actionId !== 'loading_ai'
+  );
   currentSession.messages.push({ sender: 'ai', text: aiReply });
   saveChatSessions();
   renderChatHistorySidebar();
@@ -1237,7 +1211,7 @@ async function sendAiQuery() {
 }
 
 window.onload = function () {
-  updateClock();
+  updateClock()
   if (currentUserRole) {
     document.getElementById('loginModal').classList.add('hidden');
     applyRolePermissions();
