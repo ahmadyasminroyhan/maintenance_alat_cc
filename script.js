@@ -12,12 +12,91 @@ let currentUsername = localStorage.getItem('tps_current_username') || "Teknisi_T
 let allUserChatSessions = JSON.parse(localStorage.getItem('tps_chat_sessions_v3') || '{}');
 let activeSessionId = localStorage.getItem('tps_active_session_id') || null;
 
+// ==========================================
+// IDENTITAS DAN SESI CHAT PER PENGGUNA
+// ==========================================
+
+function getUserIdentityKey() {
+  const role = String(currentUserRole || '').toLowerCase();
+  const username = String(currentUsername || '').trim().toLowerCase();
+
+  return `${role}:${username}`;
+}
+
+function getActiveSessions() {
+  try {
+    return JSON.parse(
+      localStorage.getItem('tps_active_sessions_v1') || '{}'
+    );
+  } catch (error) {
+    console.error('Gagal membaca sesi pengguna:', error);
+    return {};
+  }
+}
+
+function saveActiveSessionForUser() {
+  if (!currentUserRole || !currentUsername || !activeSessionId) return;
+
+  const sessions = getActiveSessions();
+  sessions[getUserIdentityKey()] = activeSessionId;
+
+  localStorage.setItem(
+    'tps_active_sessions_v1',
+    JSON.stringify(sessions)
+  );
+}
+
 let archiveCurrentLevel = 'YEAR';
 let archiveSelectedYear = null;
 let archiveSelectedMonth = null;
 
 function saveStore() { localStorage.setItem('tps_uploaded_store_v26', JSON.stringify(uploadedDataStore)); }
 function saveChatSessions() { localStorage.setItem('tps_chat_sessions_v3', JSON.stringify(allUserChatSessions)); }
+// ==========================================
+// IDENTITAS UNIK PENGGUNA
+// ==========================================
+
+function getUserIdentityKey() {
+  const role = String(currentUserRole || '').trim().toLowerCase();
+  const username = String(currentUsername || '').trim().toLowerCase();
+
+  return `${role}:${username}`;
+}
+
+function getUserChatSessions() {
+  const key = getUserIdentityKey();
+
+  if (!allUserChatSessions[key]) {
+    allUserChatSessions[key] = [];
+  }
+
+  return allUserChatSessions[key];
+}
+
+function saveActiveSessionForUser() {
+  const key = getUserIdentityKey();
+
+  if (!currentUserRole || !currentUsername || !activeSessionId) {
+    return;
+  }
+
+  let activeSessions = {};
+
+  try {
+    activeSessions = JSON.parse(
+      localStorage.getItem('tps_active_sessions_v1') || '{}'
+    );
+  } catch (error) {
+    console.error('Gagal membaca sesi aktif:', error);
+  }
+
+  activeSessions[key] = activeSessionId;
+
+  localStorage.setItem(
+    'tps_active_sessions_v1',
+    JSON.stringify(activeSessions)
+  );
+}
 
 function updateClock() {
   const now = new Date();
@@ -1053,85 +1132,235 @@ function exportWorkOrdersExcel(tahun = '', bulan = '') {
   showToast(`Berhasil mengunduh Excel: ${fileName}`);
 }
 
+// ==========================================
+// MANAJEMEN RIWAYAT CHAT PER PENGGUNA
+// ==========================================
+
 function initUserChatSessions() {
-  if (!allUserChatSessions[currentUsername]) allUserChatSessions[currentUsername] = [];
-  let userSessions = allUserChatSessions[currentUsername];
-  if (userSessions.length === 0 || !activeSessionId) {
-    createNewChatSession();
+  const identityKey = getUserIdentityKey();
+  const activeSessions = JSON.parse(
+    localStorage.getItem('tps_active_sessions_v1') || '{}'
+  );
+
+  const userSessions = getUserChatSessions();
+  const savedSessionId = activeSessions[identityKey];
+
+  if (savedSessionId && userSessions.some(s => s.id === savedSessionId)) {
+    activeSessionId = savedSessionId;
+  } else if (userSessions.length > 0) {
+    activeSessionId = userSessions[0].id;
   } else {
-    if (!userSessions.some(s => s.id === activeSessionId)) activeSessionId = userSessions[0].id;
+    activeSessionId = null;
+    createNewChatSession();
+    return;
   }
-  localStorage.setItem('tps_active_session_id', activeSessionId);
-  renderChatHistorySidebar(); renderActiveChatMessages();
+
+  saveChatSessions();
+  saveActiveSessionForUser();
+
+  renderChatHistorySidebar();
+  renderActiveChatMessages();
 }
 
 function createNewChatSession() {
-  if (!allUserChatSessions[currentUsername]) allUserChatSessions[currentUsername] = [];
-  let newId = 'session_' + Date.now();
-  let newSession = {
-    id: newId, title: 'Percakapan Baru',
-    messages: [{ sender: 'ai', text: `Halo rekan **${currentUsername}**, silakan tanyakan kendala teknis atau informasi perbaikan operasional Container Crane PT TPS.` }]
+  const userSessions = getUserChatSessions();
+
+  const newSession = {
+    id: 'session_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    title: 'Percakapan Baru',
+    messages: [
+      {
+        sender: 'ai',
+        text: `Halo rekan **${currentUsername}**, silakan tanyakan kendala teknis atau prosedur maintenance Container Crane.`
+      }
+    ]
   };
-  allUserChatSessions[currentUsername].unshift(newSession);
-  activeSessionId = newId; localStorage.setItem('tps_active_session_id', activeSessionId);
-  saveChatSessions(); renderChatHistorySidebar(); renderActiveChatMessages();
+
+  userSessions.unshift(newSession);
+
+  activeSessionId = newSession.id;
+
+  saveChatSessions();
+  saveActiveSessionForUser();
+
+  renderChatHistorySidebar();
+  renderActiveChatMessages();
 }
 
 function switchChatSession(sessionId) {
-  activeSessionId = sessionId; localStorage.setItem('tps_active_session_id', activeSessionId);
-  renderChatHistorySidebar(); renderActiveChatMessages();
+  const userSessions = getUserChatSessions();
+
+  // Hanya izinkan sesi yang dimiliki identitas aktif.
+  const selectedSession = userSessions.find(
+    session => session.id === sessionId
+  );
+
+  if (!selectedSession) {
+    alert('Riwayat chat tidak ditemukan untuk ID pengguna ini.');
+    return;
+  }
+
+  activeSessionId = selectedSession.id;
+
+  saveActiveSessionForUser();
+
+  renderChatHistorySidebar();
+  renderActiveChatMessages();
 }
 
 function deleteChatSession(sessionId, event) {
-  event.stopPropagation();
-  if (!confirm('Hapus sesi riwayat chat ini?')) return;
-  let userSessions = allUserChatSessions[currentUsername];
-  allUserChatSessions[currentUsername] = userSessions.filter(s => s.id !== sessionId);
-  if (allUserChatSessions[currentUsername].length === 0) createNewChatSession();
-  else if (activeSessionId === sessionId) activeSessionId = allUserChatSessions[currentUsername][0].id;
-  saveChatSessions(); renderChatHistorySidebar(); renderActiveChatMessages();
+  if (event) {
+    event.stopPropagation();
+  }
+
+  if (!confirm('Hapus riwayat percakapan ini?')) {
+    return;
+  }
+
+  const userSessions = getUserChatSessions();
+
+  const remainingSessions = userSessions.filter(
+    session => session.id !== sessionId
+  );
+
+  allUserChatSessions[getUserIdentityKey()] = remainingSessions;
+
+  if (activeSessionId === sessionId) {
+    activeSessionId = null;
+  }
+
+  saveChatSessions();
+
+  if (remainingSessions.length === 0) {
+    createNewChatSession();
+    return;
+  }
+
+  if (!activeSessionId || !remainingSessions.some(s => s.id === activeSessionId)) {
+    activeSessionId = remainingSessions[0].id;
+  }
+
+  saveActiveSessionForUser();
+
+  renderChatHistorySidebar();
+  renderActiveChatMessages();
 }
 
 function renderChatHistorySidebar() {
   const listEl = document.getElementById('chatHistoryList');
-  if (!listEl) return;
-  let userSessions = allUserChatSessions[currentUsername] || [];
-  if (userSessions.length === 0) return listEl.innerHTML = `<p class="text-slate-400 text-center py-4 text-xs">Belum ada riwayat</p>`;
 
-  listEl.innerHTML = userSessions.map(s => `
-    <div onclick="switchChatSession('${s.id}')" class="p-2 rounded-lg cursor-pointer flex justify-between items-center transition ${s.id === activeSessionId ? 'bg-primary text-white font-semibold shadow-sm' : 'hover:bg-slate-200 text-slate-700'}">
-      <div class="truncate pr-2 text-[11px] md:text-xs"><i class="fa-regular fa-message mr-1.5"></i> ${s.title}</div>
-      <button onclick="deleteChatSession('${s.id}', event)" class="text-slate-400 hover:text-red-300 p-1"><i class="fa-solid fa-trash-can text-[10px]"></i></button>
-    </div>
-  `).join('');
+  if (!listEl) {
+    return;
+  }
+
+  const userSessions = getUserChatSessions();
+
+  if (userSessions.length === 0) {
+    listEl.innerHTML = `
+      <p class="text-slate-400 text-center py-4 text-xs">
+        Belum ada riwayat percakapan.
+      </p>
+    `;
+    return;
+  }
+
+  listEl.innerHTML = userSessions.map(session => {
+    const active = session.id === activeSessionId;
+
+    return `
+      <div
+        class="p-2 rounded-lg cursor-pointer flex justify-between items-center transition ${active
+        ? 'bg-primary text-white font-semibold shadow-sm'
+        : 'hover:bg-slate-200 text-slate-700'
+      }"
+      >
+        <button
+          type="button"
+          onclick="switchChatSession('${session.id}')"
+          class="truncate pr-2 text-left text-[11px] md:text-xs flex-1 min-w-0"
+        >
+          <i class="fa-regular fa-message mr-1.5"></i>
+          ${escapeChatText(session.title)}
+        </button>
+
+        <button
+          type="button"
+          onclick="deleteChatSession('${session.id}', event)"
+          class="text-slate-400 hover:text-red-500 p-1 shrink-0"
+          aria-label="Hapus percakapan"
+          title="Hapus percakapan"
+        >
+          <i class="fa-solid fa-trash-can text-[10px]"></i>
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+function escapeChatText(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[char]);
 }
 
 function renderActiveChatMessages() {
   const chatBox = document.getElementById('aiChatBox');
-  if (!chatBox) return;
-  let userSessions = allUserChatSessions[currentUsername] || [];
-  let currentSession = userSessions.find(s => s.id === activeSessionId);
-  if (!currentSession) return;
 
-  chatBox.innerHTML = currentSession.messages.map(m => {
-    let formattedText = m.text
+  if (!chatBox) {
+    return;
+  }
+
+  const userSessions = getUserChatSessions();
+
+  const currentSession = userSessions.find(
+    session => session.id === activeSessionId
+  );
+
+  if (!currentSession) {
+    chatBox.innerHTML = `
+      <div class="text-center text-slate-400 text-sm p-4">
+        Belum ada percakapan yang dipilih.
+      </div>
+    `;
+    return;
+  }
+
+  chatBox.innerHTML = currentSession.messages.map(message => {
+    const formattedText = escapeChatText(message.text)
       .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
       .replace(/\*(.*?)\*/g, '<i>$1</i>')
       .replace(/\n/g, '<br>');
 
-    if (m.sender === 'user') {
-      return `<div class="flex items-start gap-3 justify-end"><div class="bg-primary text-white p-2.5 md:p-3 rounded-xl rounded-tr-none shadow-sm max-w-[85%]" style="word-break: break-word;">${formattedText}</div></div>`;
-    } else {
+    if (message.sender === 'user') {
       return `
-        <div class="flex items-start gap-2 md:gap-3">
-          <div class="bg-primary text-white p-2 rounded-full shrink-0"><i class="fa-solid fa-robot text-xs md:text-sm"></i></div>
-          <div class="bg-white border text-slate-700 p-3 md:p-4 rounded-xl rounded-tl-none shadow-sm max-w-[90%] space-y-2" style="word-break: break-word; line-height: 1.6;">
-            <div>${formattedText}</div>
-            <div class="text-[10px] text-slate-400 font-mono pt-2 border-t border-slate-100 mt-2">💡 AI Expert Maintenance CC - PT TPS</div>
+        <div class="flex items-start gap-3 justify-end">
+          <div class="bg-primary text-white p-3 rounded-xl rounded-tr-none shadow-sm max-w-[85%] break-words">
+            ${formattedText}
           </div>
-      </div>`;
+        </div>
+      `;
     }
+
+    return `
+      <div class="flex items-start gap-2 md:gap-3">
+        <div class="bg-primary text-white p-2 rounded-full shrink-0">
+          <i class="fa-solid fa-robot text-sm"></i>
+        </div>
+
+        <div class="bg-white border text-slate-700 p-3 md:p-4 rounded-xl rounded-tl-none shadow-sm max-w-[90%] break-words">
+          <div>${formattedText}</div>
+          <div class="text-[10px] text-slate-400 font-mono pt-2 border-t border-slate-100 mt-2">
+            AI Expert Maintenance CC - PT TPS
+          </div>
+        </div>
+      </div>
+    `;
   }).join('');
+
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
@@ -1141,7 +1370,7 @@ async function sendAiQuery() {
   const rawQ = inputEl.value.trim();
   if (!rawQ) return;
 
-  let userSessions = allUserChatSessions[currentUsername];
+  let userSessions = getUserChatSessions();
   let currentSession = userSessions.find(s => s.id === activeSessionId);
   if (!currentSession) return;
 
